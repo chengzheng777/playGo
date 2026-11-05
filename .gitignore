@@ -35,3 +35,6 @@ Thumbs.db
 .vite/
 .turbo/
 *.local
+
+# local scratch
+.tmp/

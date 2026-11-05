@@ -3,6 +3,8 @@
 > 传输：WebSocket 文本帧，JSON，UTF-8。
 > 地址：`ws://<host>:<port>/ws`（与页面同源，避免混合内容）。
 > 服务端权威：客户端只发「意图」，状态由服务端计算后广播。
+>
+> 实现状态：M0 已落地，对应 `server/hub.ts` 与 `server/rooms.ts`。
 
 ---
 
@@ -34,7 +36,7 @@
 | `room.create` | C→S | `{name, role}` | 创建房间 |
 | `room.created` | S→C | `{room, token}` | 仅创建者收到；`token` 用于重连 |
 | `room.join` | C→S | `{code, name, role, token?}` | 加入；带 `token` 即重连 |
-| `room.state` | S→C | `{room, you, version}` | 全量状态，任何变更后广播 |
+| `room.state` | S→C | `{room, you, version, token}` | 全量状态，任何变更后广播 |
 | `room.left` | S→C | `{playerId, reason}` | 玩家离开 |
 | `player.ready` | C→S | `{ready}` | 准备/取消 |
 | `chat.send` | C→S | `{text}` | 文本 ≤ 200 字 |
@@ -79,6 +81,7 @@ interface RoomState {
   room: Room;
   you: Player;         // 当前连接对应的玩家
   version: number;     // 单调递增，每次变更 +1
+  token: string;       // 本连接的重连凭证（每个玩家一份，只发给本人）
 }
 ```
 
