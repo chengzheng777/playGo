@@ -121,7 +121,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       json(res, 200, {
         ok: true,
         app: "playGo",
-        version: "0.1.0",
+        version: "0.2.0",
         port,
         rooms: rooms.size,
         buildId,

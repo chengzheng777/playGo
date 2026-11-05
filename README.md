@@ -122,3 +122,4 @@ scripts/           冒烟测试
 - [设计与可行性评估](docs/DESIGN.md) —— 浏览器能力边界、通道选型、架构、局域网排障、里程碑
 - [通信协议 v0.1](docs/PROTOCOL.md) —— WebSocket 消息定义、房间状态、游戏视图、重连与错误码
 - [打包与分发](docs/PACKAGING.md) —— 单文件 exe 方案、Electron 与 Tauri 选型
+- [更新日志](CHANGELOG.md) —— 版本变更记录
