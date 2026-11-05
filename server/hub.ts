@@ -579,13 +579,13 @@ export class Hub {
       if (action.type === "stroke") {
         const delta = record.draw.stroke(conn.playerId, action);
         if (delta) {
-          this.sendToHost(record.room.code, { v: 1, type: "draw.delta", data: delta });
+          this.broadcastRaw(record.room.code, { v: 1, type: "draw.delta", data: delta });
         }
         return;
       }
       if (action.type === "clear") {
         if (record.draw.clear(conn.playerId)) {
-          this.sendToHost(record.room.code, { v: 1, type: "draw.clear", data: {} });
+          this.broadcastRaw(record.room.code, { v: 1, type: "draw.clear", data: {} });
         }
         return;
       }
@@ -698,16 +698,6 @@ export class Hub {
         draw: record.draw?.viewFor(player.id) ?? null,
       },
     };
-  }
-
-  private sendToHost(code: string, message: ServerMessage): void {
-    const record = this.rooms.get(code);
-    if (!record) return;
-    for (const conn of this.conns.values()) {
-      if (conn.roomCode === code && conn.playerId === record.room.hostId) {
-        this.send(conn, message);
-      }
-    }
   }
 
   private broadcast(code: string): void {

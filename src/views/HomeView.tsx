@@ -10,7 +10,7 @@ import { store, useAppState } from "../store";
 export function HomeView() {
   const state = useAppState();
   const profile = state.profile;
-  const isMobile = useMediaQuery("(max-width: 720px)");
+  const isMobile = useMediaQuery("(max-width: 1024px), (pointer: coarse)");
 
   const [rooms, setRooms] = useState<RoomSummary[] | null>(null);
   const [gameId, setGameId] = useState("yiyu");

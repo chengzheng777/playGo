@@ -25,7 +25,29 @@ const CONN_LABEL: Record<string, string> = {
   closed: "已断开",
 };
 
-function drawPolyline(
+function clearBoard(ctx: CanvasRenderingContext2D) {
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, W, H);
+}
+
+function paintLine(
+  ctx: CanvasRenderingContext2D,
+  from: DrawPoint,
+  to: DrawPoint,
+  color: string,
+  width: number,
+) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(from.x * W, from.y * H);
+  ctx.lineTo(to.x * W, to.y * H);
+  ctx.stroke();
+}
+
+function paintPolyline(
   ctx: CanvasRenderingContext2D,
   points: DrawPoint[],
   color: string,
@@ -46,23 +68,19 @@ function drawPolyline(
   ctx.stroke();
 }
 
-function clearBoard(ctx: CanvasRenderingContext2D) {
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, W, H);
-}
-
-function HostCanvas({ strokes, event }: { strokes: DrawStroke[]; event: DrawEvent | null }) {
+/** 大屏 / 猜词手机：只读渲染，接收全量笔迹 + 增量 */
+function BoardCanvas({ strokes, event }: { strokes: DrawStroke[]; event: DrawEvent | null }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const lastSeq = useRef(0);
   const lastPoint = useRef(new Map<string, DrawPoint>());
 
   useEffect(() => {
-    const canvas = ref.current;
-    const ctx = canvas?.getContext("2d");
+    const ctx = ref.current?.getContext("2d");
     if (!ctx) return;
     clearBoard(ctx);
+    lastPoint.current.clear();
     for (const stroke of strokes) {
-      drawPolyline(ctx, stroke.points, stroke.color, stroke.width);
+      paintPolyline(ctx, stroke.points, stroke.color, stroke.width);
       const last = stroke.points[stroke.points.length - 1];
       if (last) lastPoint.current.set(stroke.id, last);
     }
@@ -81,7 +99,7 @@ function HostCanvas({ strokes, event }: { strokes: DrawStroke[]; event: DrawEven
     }
 
     const from = event.start ? undefined : lastPoint.current.get(event.strokeId);
-    drawPolyline(ctx, event.points, event.color, event.width, from);
+    paintPolyline(ctx, event.points, event.color, event.width, from);
     const last = event.points[event.points.length - 1];
     if (last) lastPoint.current.set(event.strokeId, last);
   }, [event]);
@@ -89,15 +107,18 @@ function HostCanvas({ strokes, event }: { strokes: DrawStroke[]; event: DrawEven
   return <canvas ref={ref} width={W} height={H} className="draw-canvas" />;
 }
 
+/** 画手的可交互画板：本地即时绘制，同时按批发送 */
 function DrawPad({
   disabled,
   color,
   width,
+  resetKey,
   onStroke,
 }: {
   disabled: boolean;
   color: string;
   width: number;
+  resetKey: string;
   onStroke: (strokeId: string, points: DrawPoint[], start: boolean) => void;
 }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
@@ -105,17 +126,23 @@ function DrawPad({
   const strokeId = useRef("");
   const buffer = useRef<DrawPoint[]>([]);
   const first = useRef(true);
+  const last = useRef<DrawPoint | null>(null);
+  const strokeColor = useRef(color);
+  const strokeWidth = useRef(width);
   const onStrokeRef = useRef(onStroke);
 
   useEffect(() => {
     onStrokeRef.current = onStroke;
   }, [onStroke]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 进入新一轮或清空时重置画板
   useEffect(() => {
-    const canvas = ref.current;
-    const ctx = canvas?.getContext("2d");
+    const ctx = ref.current?.getContext("2d");
     if (ctx) clearBoard(ctx);
-  }, []);
+    last.current = null;
+    buffer.current = [];
+    drawing.current = false;
+  }, [resetKey]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -128,47 +155,64 @@ function DrawPad({
     return () => window.clearInterval(timer);
   }, []);
 
-  function pointOf(event: ReactPointerEvent<HTMLCanvasElement>): DrawPoint {
+  function pointFrom(clientX: number, clientY: number): DrawPoint {
     const canvas = ref.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     return {
-      x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
-      y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
+      x: Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)),
+      y: Math.min(1, Math.max(0, (clientY - rect.top) / rect.height)),
     };
+  }
+
+  function flush() {
+    if (buffer.current.length === 0) return;
+    const points = buffer.current;
+    buffer.current = [];
+    onStrokeRef.current(strokeId.current, points, first.current);
+    first.current = false;
   }
 
   function start(event: ReactPointerEvent<HTMLCanvasElement>) {
     if (disabled) return;
     const canvas = ref.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
     canvas.setPointerCapture(event.pointerId);
     drawing.current = true;
     strokeId.current = `s${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
+    strokeColor.current = color;
+    strokeWidth.current = width;
     first.current = true;
-    buffer.current = [pointOf(event)];
+    const point = pointFrom(event.clientX, event.clientY);
+    last.current = point;
+    buffer.current = [point];
   }
 
   function move(event: ReactPointerEvent<HTMLCanvasElement>) {
     if (!drawing.current) return;
-    const point = pointOf(event);
-    buffer.current.push(point);
-
     const ctx = ref.current?.getContext("2d");
     if (!ctx) return;
-    const previous = buffer.current[buffer.current.length - 2];
-    drawPolyline(ctx, [point], color, width, previous);
+
+    const native = event.nativeEvent;
+    const points =
+      typeof native.getCoalescedEvents === "function" ? native.getCoalescedEvents() : [native];
+    const source = points.length > 0 ? points : [native];
+
+    for (const item of source) {
+      const point = pointFrom(item.clientX, item.clientY);
+      const previous = last.current;
+      if (previous) {
+        paintLine(ctx, previous, point, strokeColor.current, strokeWidth.current);
+      }
+      last.current = point;
+      buffer.current.push(point);
+    }
   }
 
   function end() {
     if (!drawing.current) return;
     drawing.current = false;
-    if (buffer.current.length > 0) {
-      onStroke(strokeId.current, buffer.current, first.current);
-      buffer.current = [];
-    }
+    flush();
   }
 
   return (
@@ -196,6 +240,7 @@ export function DrawGameView() {
   const [guess, setGuess] = useState("");
   const [color, setColor] = useState(COLORS[0]);
   const [width, setWidth] = useState(WIDTHS[1]);
+  const [clearKey, setClearKey] = useState(0);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now() + state.serverOffset), 200);
@@ -277,20 +322,16 @@ export function DrawGameView() {
         </div>
 
         <div className="draw-stage">
-          {isHost ? (
-            <HostCanvas strokes={game.strokes} event={state.drawEvent} />
-          ) : isDrawer ? (
+          {isDrawer && game.phase === "draw" ? (
             <DrawPad
-              disabled={game.phase !== "draw"}
+              disabled={false}
               color={color}
               width={width}
+              resetKey={`${game.round}-${clearKey}`}
               onStroke={sendStroke}
             />
           ) : (
-            <div className="draw-waiting">
-              <span className="draw-waiting-emoji">👀</span>
-              <p>{game.drawerName} 正在画，猜猜看</p>
-            </div>
+            <BoardCanvas strokes={game.strokes} event={state.drawEvent} />
           )}
         </div>
 
@@ -324,7 +365,10 @@ export function DrawGameView() {
                 <button
                   type="button"
                   className="btn btn-ghost btn-mini"
-                  onClick={() => store.gameAction({ type: "clear" })}
+                  onClick={() => {
+                    setClearKey((value) => value + 1);
+                    store.gameAction({ type: "clear" });
+                  }}
                 >
                   清空
                 </button>

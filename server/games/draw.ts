@@ -43,7 +43,6 @@ export class DrawGame {
   winnerId?: string;
 
   private readonly players: Entry[] = [];
-  private readonly hostId: string;
   private readonly totalRounds: number;
   private readonly roundMs: number;
   private readonly strokes: DrawStroke[] = [];
@@ -56,7 +55,6 @@ export class DrawGame {
   private readonly used = new Set<string>();
 
   constructor(players: Player[], options: DrawOptions, now: number) {
-    this.hostId = options.hostId;
     this.roundMs = (options.roundSeconds ?? 80) * 1000;
 
     [...players]
@@ -170,7 +168,6 @@ export class DrawGame {
   }
 
   viewFor(playerId: string): DrawView {
-    const isHost = playerId === this.hostId;
     const isDrawer = playerId === this.drawerId;
     const showWord = this.phase !== "draw" || isDrawer;
 
@@ -191,12 +188,10 @@ export class DrawGame {
         connected: player.connected,
         isDrawer: player.id === this.drawerId,
       })),
-      strokes: isHost
-        ? this.strokes.map((stroke) => ({
-            ...stroke,
-            points: stroke.points.map((point) => ({ ...point })),
-          }))
-        : [],
+      strokes: this.strokes.map((stroke) => ({
+        ...stroke,
+        points: stroke.points.map((point) => ({ ...point })),
+      })),
       result: this.phase === "draw" ? undefined : this.result,
       lastEvent: this.lastEvent,
     };

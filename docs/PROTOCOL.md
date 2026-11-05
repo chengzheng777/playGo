@@ -376,7 +376,7 @@ interface DrawView {
   deadline: number;
   word?: string; // 作画时只给画手；揭晓后所有人可见
   scores: { id; name; avatar; score; connected; isDrawer }[];
-  strokes: DrawStroke[]; // 只发给大屏，用于重连重绘
+  strokes: DrawStroke[]; // 发给所有人，用于首次进入 / 重连重绘
   result?: { word; guesserName?; points? };
   lastEvent: { id; text } | null;
 }
@@ -399,6 +399,6 @@ interface DrawStroke {
 ```
 
 - `stroke` / `clear` 仅当前画手有效；坐标、颜色、线宽、点数都会校验。
-- 服务端把笔迹以 `draw.delta` 只转发给大屏（房主），`draw.clear` 同理；其他玩家收不到，省流量。
-- 大屏重连时通过 `room.state.draw.strokes` 全量重绘。
+- 服务端把笔迹以 `draw.delta` / `draw.clear` 广播给房间内所有人，大屏和猜词手机都能实时看到。
+- 首次进入或重连时通过 `room.state.draw.strokes` 全量重绘。
 - 猜对：猜的人 +10、画手 +5，立即进入揭晓；大屏在作画阶段拿不到 `word`。

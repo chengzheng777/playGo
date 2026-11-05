@@ -74,7 +74,7 @@ describe("你画我猜", () => {
       start: false,
     });
     expect(game.viewFor(HOST_ID).strokes[0]?.points).toHaveLength(2);
-    expect(game.viewFor(participants[0]!.id).strokes).toHaveLength(0);
+    expect(game.viewFor(participants[0]!.id).strokes).toHaveLength(1);
   });
 
   it("清空只对画手生效", () => {
