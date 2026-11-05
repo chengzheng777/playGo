@@ -38,3 +38,7 @@ Thumbs.db
 
 # local scratch
 .tmp/
+
+# test artifacts
+coverage/
+e2e/.artifacts/

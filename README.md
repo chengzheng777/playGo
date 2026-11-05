@@ -69,14 +69,18 @@ pnpm dev
 
 ## 脚本
 
-| 命令             | 说明                                           |
-| ---------------- | ---------------------------------------------- |
-| `pnpm dev`       | 开发模式，Vite 中间件 + HMR，默认 8787         |
-| `pnpm build`     | 构建前端到 `dist/`                             |
-| `pnpm start`     | 生产模式，需先 build；`PORT=xxxx` 可改端口     |
-| `pnpm typecheck` | TypeScript 类型检查                            |
-| `pnpm engine`    | 一愚惊人规则引擎的单元冒烟测试（不需要起服务） |
-| `pnpm smoke`     | 对着运行中的服务跑协议 + 游戏流程冒烟测试      |
+| 命令             | 说明                                       |
+| ---------------- | ------------------------------------------ |
+| `pnpm dev`       | 开发模式，Vite 中间件 + HMR，默认 8787     |
+| `pnpm build`     | 构建前端到 `dist/`                         |
+| `pnpm start`     | 生产模式，需先 build；`PORT=xxxx` 可改端口 |
+| `pnpm typecheck` | TypeScript 类型检查                        |
+| `pnpm lint`      | Biome 检查（格式 + 规则）                  |
+| `pnpm test`      | Vitest 单元测试（三个游戏的规则引擎）      |
+| `pnpm coverage`  | 覆盖率报告，输出到 `coverage/`             |
+| `pnpm smoke`     | 对着运行中的服务跑协议 + 游戏流程冒烟      |
+| `pnpm e2e`       | 真浏览器端到端（需先起服务、装 Chrome）    |
+| `pnpm verify`    | typecheck + lint + test + build            |
 
 ## 目录
 

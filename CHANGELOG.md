@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### 工程
+
+- Vitest 单元测试（16 个用例）与覆盖率阈值
+- 真浏览器 E2E：建房 → 加入 → 开始 → 计分
+- Biome 格式与规则检查，新增 `pnpm lint` / `format` / `verify`
+- GitHub Actions：CI（类型 / Lint / 测试 / 覆盖率 / 冒烟 / E2E）与 Release（打 tag 自动打包）
+- Dependabot 每周更新依赖
+- 补充 MIT License、`.editorconfig`
+
 ## v0.2.0 — 2026-11-05
 
 首个可玩版本：三个游戏，完整的房间、用户和大厅体系。

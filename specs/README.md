@@ -6,7 +6,7 @@
 
 1. **Spec**：新增或修改 `specs/NNN-name.md`，写清背景、行为、接口、验收标准。
 2. **实现**：按 spec 写代码；接口变更同步 `docs/PROTOCOL.md`。
-3. **验收**：spec 里的验收项必须能被 `pnpm engine`（纯逻辑）或 `pnpm smoke`（协议/流程）覆盖；覆盖不了的在 spec 里注明「手测」。
+3. **验收**：spec 里的验收项必须能被 `pnpm test`（纯逻辑）或 `pnpm smoke`（协议/流程）覆盖；覆盖不了的在 spec 里注明「手测」。
 4. **归档**：合并后 spec 不删除，作为行为基线；行为变了就改 spec，再改代码。
 
 ## 约定

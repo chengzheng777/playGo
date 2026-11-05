@@ -22,10 +22,18 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: 类型检查 / Lint / 规则测试 / 构建
+      - name: 类型检查 / Lint / 单元测试 / 构建
         run: pnpm verify
 
-      - name: 协议冒烟
+      - name: 覆盖率
+        run: pnpm coverage
+
+      - uses: browser-actions/setup-chrome@v1
+        id: chrome
+
+      - name: 起服务，跑协议冒烟与 E2E
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
         run: |
           pnpm dev > /tmp/playgo.log 2>&1 &
           for i in $(seq 1 40); do
@@ -33,3 +41,4 @@ jobs:
             sleep 1
           done
           pnpm smoke
+          pnpm e2e

@@ -32,9 +32,11 @@ scripts/   规则与协议冒烟测试
 | `pnpm typecheck` | TS 类型检查                       |
 | `pnpm lint`      | Biome 检查（格式 + 规则）         |
 | `pnpm lint:fix`  | 自动修复                          |
-| `pnpm engine`    | 规则引擎测试                      |
+| `pnpm test`      | Vitest 单元测试                   |
+| `pnpm coverage`  | 覆盖率报告                        |
 | `pnpm smoke`     | 协议冒烟（需服务在跑）            |
-| `pnpm verify`    | typecheck + lint + engine + build |
+| `pnpm e2e`       | 真浏览器端到端（需服务与 Chrome） |
+| `pnpm verify`    | typecheck + lint + test + build   |
 
 ## 提交规范
 

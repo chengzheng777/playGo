@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: 校验
+        run: pnpm verify
+
+      - name: 打包
+        run: |
+          mkdir -p release/playGo
+          cp -r dist server shared scripts package.json pnpm-lock.yaml \
+            README.md CHANGELOG.md LICENSE CONTRIBUTING.md \
+            biome.json tsconfig.json vite.config.ts vitest.config.ts \
+            release/playGo/
+          cd release && zip -r "playGo-${{ github.ref_name }}.zip" playGo
+
+      - name: 发布
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.zip
+          generate_release_notes: true

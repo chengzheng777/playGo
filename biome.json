@@ -40,7 +40,7 @@
   },
   "overrides": [
     {
-      "includes": ["scripts/**"],
+      "includes": ["scripts/**", "tests/**", "e2e/**"],
       "linter": {
         "rules": {
           "style": {
