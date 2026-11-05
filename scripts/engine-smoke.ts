@@ -8,6 +8,7 @@
 import type { Player, YiyuView } from "../shared/protocol";
 import { defaultAvatar } from "../shared/avatars";
 import { YiyuGame } from "../server/games/yiyu";
+import { UnoGame } from "../server/games/uno";
 
 const HOST_ID = "p1";
 
@@ -137,6 +138,53 @@ if (rushGame) {
   check("抢答后离开 turn", rushGame.phase !== "turn");
   const afterRight = view(rushGame, HOST_ID);
   check("抢答者所在队伍得分", afterRight.teams.some((team) => team.score === 1));
+}
+
+// --- UNO ---
+console.log("\nUNO");
+{
+  const unoPlayers = players.filter((player) => player.id !== HOST_ID);
+  const uno = new UnoGame(unoPlayers, 0);
+  const first = uno.viewFor(unoPlayers[0]!.id);
+  check("UNO 每人 7 张", first.hand.length === 7);
+  check("UNO 有弃牌堆顶", first.discardTop !== undefined);
+  check("UNO 有回合玩家", first.turnPlayerId.length > 0);
+
+  const turnId = first.turnPlayerId;
+  const turnView = uno.viewFor(turnId);
+  check(
+    "UNO 非当前玩家不能出牌",
+    uno.action(unoPlayers.find((player) => player.id !== turnId)!.id, { type: "draw" }, 0) ===
+      false,
+  );
+
+  const playableId = turnView.playableIds[0];
+  if (playableId) {
+    const played = uno.action(turnId, { type: "play", cardId: playableId, color: "red" }, 0);
+    check("UNO 可以出牌", played === true);
+    check("UNO 出牌后手牌减少", uno.viewFor(turnId).hand.length === 6);
+  }
+
+  let guard = 0;
+  while (uno.phase !== "ended" && guard < 600) {
+    guard += 1;
+    const view = uno.viewFor(uno.viewFor(unoPlayers[0]!.id).turnPlayerId);
+    const current = view.turnPlayerId;
+    const currentView = uno.viewFor(current);
+    const cardId = currentView.playableIds[0];
+    if (cardId) {
+      uno.action(current, { type: "play", cardId, color: "red" }, 0);
+    } else {
+      uno.action(current, { type: "draw" }, 0);
+      const after = uno.viewFor(current);
+      const drawn = after.playableIds[0];
+      if (after.mustDraw && drawn) {
+        uno.action(current, { type: "play", cardId: drawn, color: "red" }, 0);
+      }
+    }
+  }
+  check("UNO 能打到结束", uno.phase === "ended");
+  check("UNO 有获胜者", typeof uno.winnerId === "string");
 }
 
 // --- 掉线 ---

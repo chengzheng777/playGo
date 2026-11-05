@@ -4,10 +4,11 @@ import type {
   ChatMessage,
   ClientMessage,
   ErrorCode,
+  GameAction,
   Player,
   Room,
   ServerMessage,
-  YiyuAction,
+  UnoView,
   YiyuSettings,
   YiyuView,
 } from "../shared/protocol";
@@ -42,6 +43,7 @@ export interface AppState {
   gameId: string | null;
   settings: YiyuSettings;
   game: YiyuView | null;
+  uno: UnoView | null;
   /** 服务端时间 - 本地时间，用于倒计时校准 */
   serverOffset: number;
 }
@@ -114,6 +116,7 @@ class Store {
       gameId: null,
       settings: { ...DEFAULT_SETTINGS },
       game: null,
+      uno: null,
       serverOffset: 0,
     };
 
@@ -179,7 +182,12 @@ class Store {
     this.send({
       v: 1,
       type: "room.create",
-      data: { name: trimmed, role: "screen", gameId },
+      data: {
+        name: trimmed,
+        role: "screen",
+        gameId,
+        avatar: this.state.profile?.avatar,
+      },
     });
     this.openSocket(false);
   }
@@ -191,7 +199,16 @@ class Store {
     this.rememberName(trimmed);
     this.closedByUs = false;
     this.set({ busy: true, error: null, joinCode: roomCode });
-    this.send({ v: 1, type: "room.join", data: { code: roomCode, name: trimmed, role: "player" } });
+    this.send({
+      v: 1,
+      type: "room.join",
+      data: {
+        code: roomCode,
+        name: trimmed,
+        role: "player",
+        avatar: this.state.profile?.avatar,
+      },
+    });
     this.openSocket(false);
   }
 
@@ -240,7 +257,7 @@ class Store {
     this.send({ v: 1, type: "game.start", data: {} });
   }
 
-  gameAction(action: YiyuAction): void {
+  gameAction(action: GameAction): void {
     this.send({ v: 1, type: "game.action", data: { action } });
   }
 
@@ -278,6 +295,7 @@ class Store {
       gameId: null,
       settings: { ...DEFAULT_SETTINGS },
       game: null,
+      uno: null,
     });
     history.replaceState(null, "", "/");
   }
@@ -425,13 +443,15 @@ class Store {
           gameId: null,
           settings: { ...DEFAULT_SETTINGS },
           game: null,
+          uno: null,
         });
         history.replaceState(null, "", `/r/${room.code}`);
         return;
       }
 
       case "room.state": {
-        const { room, you, version, token, gameId, settings, game, serverTime } = message.data;
+        const { room, you, version, token, gameId, settings, game, uno, serverTime } =
+          message.data;
         this.applySession(room.code, token);
         const wasLobby = this.state.view === "lobby";
         this.set({
@@ -444,6 +464,7 @@ class Store {
           gameId,
           settings,
           game,
+          uno,
           serverOffset: serverTime - Date.now(),
         });
         if (!wasLobby) history.replaceState(null, "", `/r/${room.code}`);
@@ -492,6 +513,7 @@ class Store {
         gameId: null,
         settings: { ...DEFAULT_SETTINGS },
         game: null,
+        uno: null,
       });
       history.replaceState(null, "", "/");
       return;

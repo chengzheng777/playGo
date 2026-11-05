@@ -11,6 +11,7 @@ import {
   type YiyuSettings,
 } from "../shared/protocol";
 import type { YiyuGame } from "./games/yiyu";
+import type { UnoGame } from "./games/uno";
 import { defaultAvatar } from "../shared/avatars";
 
 export interface RoomRecord {
@@ -25,6 +26,7 @@ export interface RoomRecord {
   settings: YiyuSettings;
   /** 进行中的游戏实例 */
   game: YiyuGame | null;
+  uno: UnoGame | null;
 }
 
 export type JoinError = "ROOM_NOT_FOUND" | "ROOM_FULL" | "NAME_TAKEN" | "BAD_TOKEN" | "BAD_PHASE";
@@ -117,6 +119,7 @@ export class RoomManager {
       gameId,
       settings: { ...DEFAULT_SETTINGS },
       game: null,
+      uno: null,
     };
     this.rooms.set(code, record);
     return { record, player, token };

@@ -280,6 +280,36 @@ async function main() {
   );
   check("结束游戏回到大厅", backToLobby.data.game === null);
 
+  // ---- UNO ----
+  console.log("\nUNO");
+  guest2.send("player.ready", { ready: true });
+  carol.send("player.ready", { ready: true });
+  await host.next(
+    (m) => m.type === "room.state" && m.data.room.players.filter((p) => p.ready).length >= 2,
+  );
+
+  host.send("game.select", { gameId: "uno" });
+  await host.next((m) => m.type === "room.state" && m.data.gameId === "uno");
+
+  host.send("game.start", {});
+  const unoHost = await host.next(
+    (m) => m.type === "room.state" && m.data.uno?.phase === "turn",
+  );
+  check("UNO 开局", unoHost.data.uno.players.length === 2);
+  check("UNO 每人 7 张", unoHost.data.uno.players.every((p) => p.handCount === 7));
+  check("大屏没有手牌", unoHost.data.uno.hand.length === 0);
+
+  const bobUno = await guest2.next((m) => m.data.uno?.phase === "turn");
+  check("手机能看到自己的手牌", bobUno.data.uno.hand.length === 7);
+
+  const unoTurnId = unoHost.data.uno.turnPlayerId;
+  const unoClient = unoTurnId === bobUno.data.you.id ? guest2 : carol;
+  unoClient.send("game.action", { action: { type: "draw" } });
+  await host.next(
+    (m) => m.type === "room.state" && m.data.uno?.players.some((p) => p.handCount === 8),
+  );
+  check("UNO 摸牌生效", true);
+
   host.close();
   guest2.close();
   carol.close();

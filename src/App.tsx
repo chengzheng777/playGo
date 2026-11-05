@@ -5,6 +5,7 @@ import { HomeView } from "./views/HomeView";
 import { JoinView } from "./views/JoinView";
 import { LobbyView } from "./views/LobbyView";
 import { OnboardingView } from "./views/OnboardingView";
+import { UnoGameView } from "./views/UnoView";
 
 export function App() {
   const state = useAppState();
@@ -17,7 +18,8 @@ export function App() {
         <>
           {state.view === "home" && <HomeView />}
           {state.view === "join" && <JoinView />}
-          {state.view === "lobby" && (state.game ? <GameView /> : <LobbyView />)}
+          {state.view === "lobby" &&
+            (state.game ? <GameView /> : state.uno ? <UnoGameView /> : <LobbyView />)}
         </>
       )}
       {state.error && <Toast key={state.error} text={state.error} onDone={store.clearError} />}

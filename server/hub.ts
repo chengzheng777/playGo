@@ -13,12 +13,15 @@ import {
   type Player,
   type Role,
   type ServerMessage,
+  type GameAction,
+  type UnoAction,
   type YiyuAction,
   type YiyuSettings,
 } from "../shared/protocol";
 import { isPlayableGame } from "../shared/games";
 import { RoomManager, type RoomRecord } from "./rooms";
 import { YiyuGame } from "./games/yiyu";
+import { UnoGame } from "./games/uno";
 
 interface Conn {
   id: string;
@@ -74,6 +77,13 @@ const gameActionSchema = z.object({
     z.object({ type: z.literal("correct") }),
     z.object({ type: z.literal("skip") }),
     z.object({ type: z.literal("guess"), text: z.string().trim().min(1).max(24) }),
+    z.object({
+      type: z.literal("play"),
+      cardId: z.string().min(1).max(16),
+      color: z.enum(["red", "yellow", "green", "blue"]).optional(),
+    }),
+    z.object({ type: z.literal("draw") }),
+    z.object({ type: z.literal("pass") }),
   ]),
 });
 
@@ -137,7 +147,7 @@ function parseClientMessage(raw: string): Parsed {
       if (!parsed.success) return { kind: "invalid" };
       return {
         kind: "ok",
-        msg: { ...base, type: "game.action", data: { action: parsed.data.action as YiyuAction } },
+        msg: { ...base, type: "game.action", data: { action: parsed.data.action as GameAction } },
       };
     }
     case "game.back":
@@ -342,6 +352,7 @@ export class Hub {
     this.bind(conn, data.code, result.player.id);
     this.clearRemovalTimer(data.code, result.player.id);
     result.record.game?.setConnected(result.player.id, true);
+    result.record.uno?.setConnected(result.player.id, true);
     this.send(conn, this.stateFor(result.record, result.player));
     this.broadcast(data.code);
   }
@@ -354,6 +365,7 @@ export class Hub {
     this.clearRemovalTimer(roomCode, playerId);
     const record = this.rooms.get(roomCode);
     record?.game?.setConnected(playerId, false);
+    record?.uno?.setConnected(playerId, false);
     this.rooms.removePlayer(roomCode, playerId);
     this.broadcast(roomCode);
   }
@@ -485,20 +497,35 @@ export class Hub {
       return;
     }
 
-    record.game = new YiyuGame(
-      record.room.players,
-      { ...record.settings, hostId: record.room.hostId },
-      Date.now(),
-    );
+    if (record.gameId === "uno") {
+      record.uno = new UnoGame(participants, Date.now());
+      record.game = null;
+    } else {
+      record.game = new YiyuGame(
+        record.room.players,
+        { ...record.settings, hostId: record.room.hostId },
+        Date.now(),
+      );
+      record.uno = null;
+    }
     record.room.phase = "playing";
     record.version += 1;
     this.broadcast(record.room.code);
   }
 
-  private gameAction(conn: Conn, action: YiyuAction): void {
+  private gameAction(conn: Conn, action: GameAction): void {
     const record = this.roomOf(conn);
-    if (!record?.game || record.room.phase !== "playing" || !conn.playerId) return;
-    if (record.game.action(conn.playerId, action, Date.now())) {
+    if (record?.room.phase !== "playing" || !conn.playerId) return;
+
+    const now = Date.now();
+    let changed = false;
+    if (record.game) {
+      changed = record.game.action(conn.playerId, action as YiyuAction, now);
+    } else if (record.uno) {
+      changed = record.uno.action(conn.playerId, action as UnoAction, now);
+    }
+
+    if (changed) {
       record.version += 1;
       this.broadcast(record.room.code);
     }
@@ -512,6 +539,7 @@ export class Hub {
 
     record.room.phase = "lobby";
     record.game = null;
+    record.uno = null;
     for (const player of record.room.players) player.ready = false;
     record.version += 1;
     this.broadcast(record.room.code);
@@ -529,6 +557,7 @@ export class Hub {
 
     player.connected = false;
     record.game?.setConnected(playerId, false);
+    record.uno?.setConnected(playerId, false);
     record.version += 1;
     this.broadcast(roomCode);
     this.scheduleRemoval(roomCode, playerId);
@@ -591,6 +620,7 @@ export class Hub {
         gameId: record.gameId,
         settings: { ...record.settings },
         game: record.game?.viewFor(player.id) ?? null,
+        uno: record.uno?.viewFor(player.id) ?? null,
       },
     };
   }

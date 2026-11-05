@@ -50,7 +50,7 @@ export const GAME_CATALOG: readonly GameMeta[] = [
     players: "2–8 人",
     emoji: "🃏",
     accent: "#fbbf24",
-    available: false,
+    available: true,
   },
 ];
 

@@ -36,7 +36,7 @@
 | `room.create` | C→S | `{name, role, gameId?, avatar?}` | 创建房间，可带上大厅里选好的游戏与本机头像 |
 | `room.created` | S→C | `{room, token}` | 仅创建者收到；`token` 用于重连 |
 | `room.join` | C→S | `{code, name, role, token?, avatar?}` | 加入；带 `token` 即重连 |
-| `room.state` | S→C | `{room, you, version, token, gameId, game, serverTime}` | 全量状态，任何变更后广播 |
+| `room.state` | S→C | `{room, you, version, token, gameId, settings, game, uno, serverTime}` | 全量状态，任何变更后广播 |
 | `room.left` | S→C | `{playerId, reason}` | 玩家离开 |
 | `player.ready` | C→S | `{ready}` | 准备/取消 |
 | `player.update` | C→S | `{name?, avatar?}` | 修改用户资料，随后广播 |
@@ -265,3 +265,47 @@ interface YiyuEvent {
 
 `RoomSummary` 只含公开信息：房间码、房主名、游戏、人数、阶段，不含玩家 token。
 `/api/rooms` 由客户端每 3 秒轮询一次，用来刷新大厅列表。
+
+---
+
+## 10. UNO
+
+房间选中 `uno` 时，`room.state.game` 为 `null`，`room.state.uno` 是 `UnoView`：
+
+```ts
+interface UnoView {
+  gameId: "uno";
+  phase: "turn" | "ended";
+  players: { id, name, avatar, handCount, connected }[];
+  turnPlayerId: string;
+  direction: 1 | -1;
+  currentColor: "red" | "yellow" | "green" | "blue";
+  discardTop: UnoCard;
+  drawCount: number;
+  hand: UnoCard[];        // 只有本人拿得到
+  playableIds: string[];  // 只有本人且轮到自己时才有值
+  mustDraw: boolean;      // 摸牌后可选择出或不出
+  winnerId?: string;
+  lastEvent: { id, text } | null;
+}
+
+interface UnoCard {
+  id: string;
+  color: "red" | "yellow" | "green" | "blue" | "wild";
+  kind: "number" | "skip" | "reverse" | "draw2" | "wild" | "wild4";
+  value?: number;
+}
+```
+
+动作（`game.action` 的 `action`）：
+
+```jsonc
+{ "type": "play", "cardId": "c12", "color": "red" }
+{ "type": "draw" }
+{ "type": "pass" }
+```
+
+- `play`：变色牌必须带 `color`；`mustDraw` 时只能出刚摸到的那张。
+- `draw`：摸一张；摸到可出的牌会进入「可出 / 不出」选择，否则自动跳过。
+- `pass`：只在 `mustDraw` 时有效。
+- 大屏（房主）不参赛，拿到的 `hand` 永远为空。

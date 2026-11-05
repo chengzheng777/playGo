@@ -72,6 +72,7 @@ export interface RoomStatePayload {
   gameId: string | null;
   settings: YiyuSettings;
   game: YiyuView | null;
+  uno: UnoView | null;
 }
 
 /** 房主可改的规则，开局时生效 */
@@ -147,6 +148,48 @@ export type YiyuAction =
   | { type: "skip" }
   | { type: "guess"; text: string };
 
+export type UnoColor = "red" | "yellow" | "green" | "blue";
+export type UnoCardColor = UnoColor | "wild";
+export type UnoKind = "number" | "skip" | "reverse" | "draw2" | "wild" | "wild4";
+
+export interface UnoCard {
+  id: string;
+  color: UnoCardColor;
+  kind: UnoKind;
+  value?: number;
+}
+
+export interface UnoPlayerView {
+  id: string;
+  name: string;
+  avatar: Avatar;
+  handCount: number;
+  connected: boolean;
+}
+
+export interface UnoView {
+  gameId: "uno";
+  phase: "turn" | "ended";
+  players: UnoPlayerView[];
+  turnPlayerId: string;
+  direction: 1 | -1;
+  currentColor: UnoColor;
+  discardTop: UnoCard;
+  drawCount: number;
+  hand: UnoCard[];
+  playableIds: string[];
+  mustDraw: boolean;
+  winnerId?: string;
+  lastEvent: { id: number; text: string } | null;
+}
+
+export type UnoAction =
+  | { type: "play"; cardId: string; color?: UnoColor }
+  | { type: "draw" }
+  | { type: "pass" };
+
+export type GameAction = YiyuAction | UnoAction;
+
 export type ErrorCode =
   | "PROTOCOL_ERROR"
   | "ROOM_NOT_FOUND"
@@ -181,7 +224,7 @@ export type ClientMessage =
   | (Envelope & { type: "game.select"; data: { gameId: string } })
   | (Envelope & { type: "game.settings"; data: { settings: YiyuSettings } })
   | (Envelope & { type: "game.start"; data: Record<string, never> })
-  | (Envelope & { type: "game.action"; data: { action: YiyuAction } })
+  | (Envelope & { type: "game.action"; data: { action: GameAction } })
   | (Envelope & { type: "game.back"; data: Record<string, never> })
   | (Envelope & { type: "ping"; data: { t: number } });
 

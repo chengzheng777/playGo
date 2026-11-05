@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { useState } from "react";
-import { GAME_CATALOG } from "../../shared/games";
+import { GAME_CATALOG, getGameMeta } from "../../shared/games";
 import { AvatarBadge } from "../components/Avatar";
 import { ProfileEditor } from "../components/ProfileEditor";
 import { ChatPanel } from "../components/ChatPanel";
@@ -109,6 +109,11 @@ export function LobbyView() {
                   抢答回合全场都能用手机输入答案。
                 </p>
               )}
+              {selected === "uno" && (
+                <p className="game-rule">
+                  每人 7 张牌，按颜色或数字出牌，先出完手牌获胜。大屏观战，玩家在手机上点牌出。
+                </p>
+              )}
             </section>
           ) : (
             <section className="panel current-game">
@@ -117,23 +122,31 @@ export function LobbyView() {
                 <span className="count">{selected ? "房主已选" : "等待房主"}</span>
               </div>
 
-              {selected === "yiyu" ? (
+              {selected ? (
                 <>
                   <div className="cg-head">
-                    <span className="cg-emoji">🎭</span>
+                    <span className="cg-emoji">{getGameMeta(selected)?.emoji ?? "🎲"}</span>
                     <div>
-                      <div className="cg-name">一愚惊人</div>
-                      <div className="cg-tag">一人比划，全队猜词</div>
+                      <div className="cg-name">{getGameMeta(selected)?.name ?? selected}</div>
+                      <div className="cg-tag">
+                        {getGameMeta(selected)?.tagline ?? ""}
+                      </div>
                     </div>
                   </div>
 
                   <p className="game-rule">
-                    房主电脑会播放词语，你和其他手机玩家分队猜词，记得背对屏幕。
+                    {selected === "uno"
+                      ? "每人 7 张牌，按颜色或数字出牌，先出完手牌获胜；大屏只负责观战，玩家在手机上出牌。"
+                      : "房主电脑会播放词语，你和其他手机玩家分队猜词，记得背对屏幕。"}
                   </p>
 
                   <div className="cg-settings">
-                    <span className="chip">目标 {settings.targetScore} 分</span>
-                    <span className="chip">每回合 {settings.roundSeconds} 秒</span>
+                    {selected === "yiyu" && (
+                      <>
+                        <span className="chip">目标 {settings.targetScore} 分</span>
+                        <span className="chip">每回合 {settings.roundSeconds} 秒</span>
+                      </>
+                    )}
                     <span className="chip">已加入 {readyCount} 人</span>
                   </div>
 
