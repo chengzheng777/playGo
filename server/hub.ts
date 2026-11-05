@@ -38,7 +38,11 @@ const RECONNECT_GRACE_MS = 90_000;
 const roleSchema = z.enum(["screen", "player", "spectator"]);
 const nameSchema = z.string().trim().min(1).max(MAX_NAME_LEN);
 
-const createSchema = z.object({ name: nameSchema, role: roleSchema });
+const createSchema = z.object({
+  name: nameSchema,
+  role: roleSchema,
+  gameId: z.string().trim().max(32).optional(),
+});
 const joinSchema = z.object({
   code: z.string().trim().toUpperCase().refine(isRoomCode, "invalid room code"),
   name: nameSchema.optional(),
@@ -242,7 +246,12 @@ export class Hub {
 
     switch (parsed.msg.type) {
       case "room.create":
-        return this.createRoom(conn, parsed.msg.data.name, parsed.msg.data.role);
+        return this.createRoom(
+          conn,
+          parsed.msg.data.name,
+          parsed.msg.data.role,
+          parsed.msg.data.gameId,
+        );
       case "room.join":
         return this.joinRoom(conn, parsed.msg.data);
       case "room.leave":
@@ -272,12 +281,13 @@ export class Hub {
     }
   }
 
-  private createRoom(conn: Conn, name: string, role: Role): void {
+  private createRoom(conn: Conn, name: string, role: Role, gameId?: string): void {
     if (conn.roomCode) {
       this.replyError(conn, "BAD_PHASE", "你已经在一个房间里了");
       return;
     }
-    const { record, player, token } = this.rooms.create(name, role);
+    const initialGame = gameId && isPlayableGame(gameId) ? gameId : null;
+    const { record, player, token } = this.rooms.create(name, role, initialGame);
     this.bind(conn, record.room.code, player.id);
     this.send(conn, {
       v: 1,

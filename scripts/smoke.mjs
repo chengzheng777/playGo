@@ -95,12 +95,17 @@ async function main() {
 
   const host = new Client("房主");
   await host.connect();
-  host.send("room.create", { name: "Alice", role: "screen" });
+  host.send("room.create", { name: "Alice", role: "screen", gameId: "yiyu" });
   const created = await host.next((m) => m.type === "room.created");
   const code = created.data.room.code;
   const hostToken = created.data.token;
   check("创建房间返回 4 位房间码", /^[23456789A-HJ-NP-Z]{4}$/.test(code), code);
   check("房主拿到 token", typeof hostToken === "string" && hostToken.length === 32);
+
+  const createdState = await host.next(
+    (m) => m.type === "room.state" && m.data.room.code === code,
+  );
+  check("建房时带上所选游戏", createdState.data.gameId === "yiyu");
 
   const guest = new Client("玩家B");
   await guest.connect();

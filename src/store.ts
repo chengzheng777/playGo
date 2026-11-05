@@ -126,13 +126,17 @@ class Store {
     if (this.state.error !== null) this.set({ error: null });
   };
 
-  createRoom(name: string): void {
+  createRoom(name: string, gameId?: string): void {
     const trimmed = name.trim();
     if (!trimmed || this.state.busy) return;
     this.rememberName(trimmed);
     this.closedByUs = false;
     this.set({ busy: true, error: null });
-    this.send({ v: 1, type: "room.create", data: { name: trimmed, role: "screen" } });
+    this.send({
+      v: 1,
+      type: "room.create",
+      data: { name: trimmed, role: "screen", gameId },
+    });
     this.openSocket(false);
   }
 

@@ -72,6 +72,17 @@ select {
   gap: 16px;
 }
 
+/* 首页 = 大厅，内容更长，改成从上往下排 */
+.home-hall {
+  justify-content: flex-start;
+  padding-top: clamp(24px, 6vh, 64px);
+  width: min(480px, 100%);
+}
+
+.hall-panel {
+  gap: 12px;
+}
+
 .brand {
   text-align: center;
   margin-bottom: 6px;

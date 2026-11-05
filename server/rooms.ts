@@ -63,7 +63,11 @@ export class RoomManager {
     return this.rooms.size;
   }
 
-  create(name: string, role: Role): { record: RoomRecord; player: Player; token: string } {
+  create(
+    name: string,
+    role: Role,
+    gameId: string | null = null,
+  ): { record: RoomRecord; player: Player; token: string } {
     const code = this.uniqueCode();
     const player: Player = {
       id: shortId("p"),
@@ -89,7 +93,7 @@ export class RoomManager {
       version: 1,
       tokens: new Map([[player.id, token]]),
       lastActiveAt: Date.now(),
-      gameId: null,
+      gameId,
       settings: { ...DEFAULT_SETTINGS },
       game: null,
     };

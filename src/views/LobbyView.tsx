@@ -80,8 +80,8 @@ export function LobbyView() {
           {isHost ? (
             <section className="panel games-panel">
               <div className="panel-head">
-                <h2>游戏大厅</h2>
-                <span className="count">选一个开始</span>
+                <h2>选择游戏</h2>
+                <span className="count">开局前可换</span>
               </div>
 
               <div className="game-grid">

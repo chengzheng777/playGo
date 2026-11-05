@@ -154,7 +154,7 @@ export interface Envelope {
 }
 
 export type ClientMessage =
-  | (Envelope & { type: "room.create"; data: { name: string; role: Role } })
+  | (Envelope & { type: "room.create"; data: { name: string; role: Role; gameId?: string } })
   | (Envelope & {
       type: "room.join";
       data: { code: string; name?: string; role?: Role; token?: string };

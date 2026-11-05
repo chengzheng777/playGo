@@ -33,7 +33,7 @@
 | type | 方向 | data | 说明 |
 | --- | --- | --- | --- |
 | `welcome` | S→C | `{clientId, protocol, serverTime}` | 连接建立后立即下发 |
-| `room.create` | C→S | `{name, role}` | 创建房间 |
+| `room.create` | C→S | `{name, role, gameId?}` | 创建房间，可带上大厅里选好的游戏 |
 | `room.created` | S→C | `{room, token}` | 仅创建者收到；`token` 用于重连 |
 | `room.join` | C→S | `{code, name, role, token?}` | 加入；带 `token` 即重连 |
 | `room.state` | S→C | `{room, you, version, token, gameId, game, serverTime}` | 全量状态，任何变更后广播 |
