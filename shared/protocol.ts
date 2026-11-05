@@ -144,10 +144,7 @@ export interface YiyuView {
   lastEvent: YiyuEvent | null;
 }
 
-export type YiyuAction =
-  | { type: "correct" }
-  | { type: "skip" }
-  | { type: "guess"; text: string };
+export type YiyuAction = { type: "correct" } | { type: "skip" } | { type: "guess"; text: string };
 
 export type UnoColor = "red" | "yellow" | "green" | "blue";
 export type UnoCardColor = UnoColor | "wild";

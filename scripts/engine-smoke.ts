@@ -5,11 +5,12 @@
  *
  * 规则设定：房主 = 大屏 / 主持人，不参赛；手机玩家分队。
  */
-import type { Player, YiyuView } from "../shared/protocol";
-import { defaultAvatar } from "../shared/avatars";
-import { YiyuGame } from "../server/games/yiyu";
-import { UnoGame } from "../server/games/uno";
+
 import { ColorGame } from "../server/games/color";
+import { UnoGame } from "../server/games/uno";
+import { YiyuGame } from "../server/games/yiyu";
+import { defaultAvatar } from "../shared/avatars";
+import type { Player, YiyuView } from "../shared/protocol";
 
 const HOST_ID = "p1";
 
@@ -70,7 +71,10 @@ const other = players.find((player) => player.id !== d1 && player.id !== HOST_ID
 check("非描述者玩家不能计分", g1.action(other.id, { type: "correct" }, 1200) === false);
 check("描述者可以计分", d1 !== null && g1.action(d1, { type: "correct" }, 1500) === true);
 check("揭晓后所有人可见词", typeof view(g1, other.id).turn?.word === "string");
-check("得分 +1", view(g1, HOST_ID).teams.some((team) => team.score === 1));
+check(
+  "得分 +1",
+  view(g1, HOST_ID).teams.some((team) => team.score === 1),
+);
 check("揭晓后进入下一回合", g1.tick(1500 + 1900) === true);
 check("回合数递增", g1.round === 2);
 check("大屏也能代为计分", g1.action(HOST_ID, { type: "correct" }, 4000) === true);
@@ -83,7 +87,10 @@ check("时间未到不结算", g2.tick(4999) === false);
 check("时间到自动结算", g2.tick(5000) === true);
 check("超时进入揭晓", g2.phase === "reveal");
 check("超时结果为 timeout", view(g2, HOST_ID).turn?.result === "timeout");
-check("超时不加分", view(g2, HOST_ID).teams.every((team) => team.score === 0));
+check(
+  "超时不加分",
+  view(g2, HOST_ID).teams.every((team) => team.score === 0),
+);
 
 // --- 获胜 ---
 console.log("\n获胜");
@@ -98,7 +105,10 @@ for (let round = 0; round < 20 && g3.phase !== "ended"; round++) {
 check("达到目标分结束", g3.phase === "ended");
 const finished = view(g3, HOST_ID);
 check("有获胜队伍", finished.winnerTeam === "A" || finished.winnerTeam === "B");
-check("获胜队伍分数达标", finished.teams.some((team) => team.score >= 2));
+check(
+  "获胜队伍分数达标",
+  finished.teams.some((team) => team.score >= 2),
+);
 
 // --- 抢答 ---
 console.log("\n抢答");
@@ -111,15 +121,10 @@ check("能随机到抢答模式", rushGame !== null);
 
 if (rushGame) {
   const describer = describerOf(rushGame);
-  const guesser = players.find(
-    (player) => player.id !== describer && player.id !== HOST_ID,
-  )!;
+  const guesser = players.find((player) => player.id !== describer && player.id !== HOST_ID)!;
   const word = view(rushGame, HOST_ID).turn?.word ?? "";
 
-  check(
-    "大屏不能抢答",
-    rushGame.action(HOST_ID, { type: "guess", text: word }, 100) === false,
-  );
+  check("大屏不能抢答", rushGame.action(HOST_ID, { type: "guess", text: word }, 100) === false);
   check(
     "描述者不能自己抢答",
     rushGame.action(describer!, { type: "guess", text: word }, 100) === false,
@@ -130,15 +135,18 @@ if (rushGame) {
   );
   const afterWrong = view(rushGame, HOST_ID);
   check("猜测列表包含错误项", afterWrong.turn?.guesses.some((item) => !item.ok) === true);
-  check("猜错不加分", afterWrong.teams.every((team) => team.score === 0));
-
   check(
-    "猜对结算",
-    rushGame.action(guesser.id, { type: "guess", text: word }, 300) === true,
+    "猜错不加分",
+    afterWrong.teams.every((team) => team.score === 0),
   );
+
+  check("猜对结算", rushGame.action(guesser.id, { type: "guess", text: word }, 300) === true);
   check("抢答后离开 turn", rushGame.phase !== "turn");
   const afterRight = view(rushGame, HOST_ID);
-  check("抢答者所在队伍得分", afterRight.teams.some((team) => team.score === 1));
+  check(
+    "抢答者所在队伍得分",
+    afterRight.teams.some((team) => team.score === 1),
+  );
 }
 
 // --- UNO ---
@@ -146,7 +154,7 @@ console.log("\nUNO");
 {
   const unoPlayers = players.filter((player) => player.id !== HOST_ID);
   const uno = new UnoGame(unoPlayers, 0);
-  const first = uno.viewFor(unoPlayers[0]!.id);
+  const first = uno.viewFor(unoPlayers[0]?.id);
   check("UNO 每人 7 张", first.hand.length === 7);
   check("UNO 有弃牌堆顶", first.discardTop !== undefined);
   check("UNO 有回合玩家", first.turnPlayerId.length > 0);
@@ -155,7 +163,7 @@ console.log("\nUNO");
   const turnView = uno.viewFor(turnId);
   check(
     "UNO 非当前玩家不能出牌",
-    uno.action(unoPlayers.find((player) => player.id !== turnId)!.id, { type: "draw" }, 0) ===
+    uno.action(unoPlayers.find((player) => player.id !== turnId)?.id, { type: "draw" }, 0) ===
       false,
   );
 
@@ -169,7 +177,7 @@ console.log("\nUNO");
   let guard = 0;
   while (uno.phase !== "ended" && guard < 600) {
     guard += 1;
-    const view = uno.viewFor(uno.viewFor(unoPlayers[0]!.id).turnPlayerId);
+    const view = uno.viewFor(uno.viewFor(unoPlayers[0]?.id).turnPlayerId);
     const current = view.turnPlayerId;
     const currentView = uno.viewFor(current);
     const cardId = currentView.playableIds[0];
@@ -206,26 +214,26 @@ console.log("\n拍颜色");
   const photo = `data:image/jpeg;base64,${"A".repeat(64)}`;
   const [first, second, third] = colorPlayers;
 
-  game.action(first!.id, { type: "shoot", rgb: targetRgb, photo }, 1000);
-  game.action(second!.id, { type: "shoot", rgb: { r: 0, g: 0, b: 0 }, photo }, 1100);
-  game.action(third!.id, { type: "shoot", rgb: { r: 255, g: 255, b: 255 }, photo }, 1200);
+  game.action(first?.id, { type: "shoot", rgb: targetRgb, photo }, 1000);
+  game.action(second?.id, { type: "shoot", rgb: { r: 0, g: 0, b: 0 }, photo }, 1100);
+  game.action(third?.id, { type: "shoot", rgb: { r: 255, g: 255, b: 255 }, photo }, 1200);
 
   const revealed = game.viewFor(HOST_ID);
   check("全部提交后揭晓", revealed.phase === "reveal");
-  check("最接近的排第一", revealed.results[0]?.playerId === first!.id);
+  check("最接近的排第一", revealed.results[0]?.playerId === first?.id);
   check("第一名拿 100 分", revealed.results[0]?.points === 100);
   check("大屏能看到照片", typeof revealed.results[0]?.photo === "string");
   check(
     "玩家看不到别人照片",
-    game.viewFor(second!.id).results.every((result) => result.photo === undefined),
+    game.viewFor(second?.id).results.every((result) => result.photo === undefined),
   );
 
   game.tick(1200 + 9000);
   check("进入第二轮", game.round === 2 && game.phase === "shoot");
 
-  game.action(first!.id, { type: "shoot", rgb: targetRgb, photo }, 20000);
-  game.action(second!.id, { type: "shoot", rgb: targetRgb, photo }, 20100);
-  game.action(third!.id, { type: "shoot", rgb: targetRgb, photo }, 20200);
+  game.action(first?.id, { type: "shoot", rgb: targetRgb, photo }, 20000);
+  game.action(second?.id, { type: "shoot", rgb: targetRgb, photo }, 20100);
+  game.action(third?.id, { type: "shoot", rgb: targetRgb, photo }, 20200);
   game.tick(20200 + 9000);
   check("两轮后结束", game.phase === "ended");
   check("有获胜者", typeof game.winnerId === "string");
@@ -245,9 +253,7 @@ check(
 );
 check(
   "大屏不在任何队伍里",
-  view(g4, HOST_ID).teams.every((item) =>
-    item.members.every((member) => member.id !== HOST_ID),
-  ),
+  view(g4, HOST_ID).teams.every((item) => item.members.every((member) => member.id !== HOST_ID)),
 );
 
 console.log(`\n通过 ${passed} 项，失败 ${failures.length} 项`);

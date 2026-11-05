@@ -215,11 +215,11 @@ export class ColorGame {
   private resolve(now: number): void {
     const targetRgb = hexToRgb(this.target.hex);
     const entries = this.players
-      .filter((player) => player.submission)
-      .map((player) => ({
-        player,
-        distance: deltaE(player.submission!.rgb, targetRgb),
-      }))
+      .flatMap((player) => {
+        const submission = player.submission;
+        if (!submission) return [];
+        return [{ player, submission, distance: deltaE(submission.rgb, targetRgb) }];
+      })
       .sort((a, b) => a.distance - b.distance);
 
     this.results = entries.map((entry) => {
@@ -229,10 +229,10 @@ export class ColorGame {
       return {
         playerId: entry.player.id,
         name: entry.player.name,
-        rgb: entry.player.submission!.rgb,
+        rgb: entry.submission.rgb,
         distance: Math.round(entry.distance * 10) / 10,
         points,
-        photo: entry.player.submission!.photo,
+        photo: entry.submission.photo,
       };
     });
 

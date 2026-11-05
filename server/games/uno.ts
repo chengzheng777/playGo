@@ -121,8 +121,7 @@ export class UnoGame {
 
       player.hand.splice(index, 1);
       this.discard.push(card);
-      this.currentColor =
-        card.color === "wild" ? (action.color ?? this.currentColor) : card.color;
+      this.currentColor = card.color === "wild" ? (action.color ?? this.currentColor) : card.color;
 
       this.mustDraw = false;
       this.drawnCardId = null;
@@ -176,8 +175,7 @@ export class UnoGame {
       me && isTurn && this.phase === "turn"
         ? me.hand
             .filter(
-              (card) =>
-                (!this.mustDraw || card.id === this.drawnCardId) && this.playable(card),
+              (card) => (!this.mustDraw || card.id === this.drawnCardId) && this.playable(card),
             )
             .map((card) => card.id)
         : [];

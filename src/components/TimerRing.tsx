@@ -16,6 +16,7 @@ export function TimerRing({
   return (
     <div className={`timer${critical ? " critical" : ""}`} role="timer" aria-live="off">
       <svg viewBox="0 0 120 120" width="132" height="132">
+        <title>剩余时间</title>
         <circle className="ring-track" cx="60" cy="60" r={RADIUS} />
         <circle
           className="ring-progress"

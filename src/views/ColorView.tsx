@@ -1,8 +1,8 @@
 import type { ChangeEvent, CSSProperties } from "react";
 import { useEffect, useState } from "react";
-import { analyzePhoto, rgbText, type PhotoAnalysis } from "../lib/photo";
-import { store, useAppState } from "../store";
 import { AvatarBadge } from "../components/Avatar";
+import { analyzePhoto, type PhotoAnalysis, rgbText } from "../lib/photo";
+import { store, useAppState } from "../store";
 
 const CONN_LABEL: Record<string, string> = {
   idle: "未连接",
@@ -35,7 +35,7 @@ export function ColorGameView() {
   useEffect(() => {
     setLocal(null);
     setError(null);
-  }, [game?.round]);
+  }, []);
 
   if (!room || !you || !game) return null;
 
@@ -153,14 +153,19 @@ export function ColorGameView() {
                       <div className="color-preview-empty">已提交</div>
                     )}
                     <div className="color-preview-meta">
-                      <span className="color-mini-swatch" style={{ background: rgbText(local?.rgb ?? { r: 0, g: 0, b: 0 }) }} />
+                      <span
+                        className="color-mini-swatch"
+                        style={{ background: rgbText(local?.rgb ?? { r: 0, g: 0, b: 0 }) }}
+                      />
                       <span>{local ? rgbText(local.rgb) : "等待揭晓"}</span>
                     </div>
                     <p className="color-hint">等其他人拍完，马上揭晓</p>
                   </div>
                 ) : (
                   <>
-                    <label className={`btn btn-primary btn-block color-shutter${busy ? " busy" : ""}`}>
+                    <label
+                      className={`btn btn-primary btn-block color-shutter${busy ? " busy" : ""}`}
+                    >
                       {busy ? "处理中…" : "拍一张"}
                       <input
                         type="file"
@@ -187,10 +192,7 @@ export function ColorGameView() {
             {isHost ? (
               <div className="color-gallery">
                 {game.results.map((result, index) => (
-                  <figure
-                    key={result.playerId}
-                    className={`polaroid${index === 0 ? " best" : ""}`}
-                  >
+                  <figure key={result.playerId} className={`polaroid${index === 0 ? " best" : ""}`}>
                     {result.photo ? (
                       <img src={result.photo} alt={`${result.name} 的照片`} />
                     ) : (
@@ -220,7 +222,10 @@ export function ColorGameView() {
                   <>
                     <div className="color-result-head">
                       你的颜色
-                      <span className="color-mini-swatch" style={{ background: rgbText(myResult.rgb) }} />
+                      <span
+                        className="color-mini-swatch"
+                        style={{ background: rgbText(myResult.rgb) }}
+                      />
                       {rgbText(myResult.rgb)}
                     </div>
                     <div className="color-result-line">
@@ -253,9 +258,7 @@ export function ColorGameView() {
 
         {game.phase === "ended" && (
           <div className="color-ended">
-            <p className="color-winner">
-              🏆 {leaderboard[0]?.name ?? "本局结束"} 获胜
-            </p>
+            <p className="color-winner">🏆 {leaderboard[0]?.name ?? "本局结束"} 获胜</p>
             {isHost ? (
               <div className="winner-actions">
                 <button className="btn btn-primary btn-block" onClick={() => store.startGame()}>

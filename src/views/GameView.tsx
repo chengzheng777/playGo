@@ -8,10 +8,7 @@ import { haptics } from "../lib/haptics";
 import { isMuted, setMuted, sfx } from "../lib/sound";
 import { store, useAppState } from "../store";
 
-const MODE_INFO: Record<
-  YiyuMode,
-  { label: string; icon: string; hint: string; watch: string }
-> = {
+const MODE_INFO: Record<YiyuMode, { label: string; icon: string; hint: string; watch: string }> = {
   talk: {
     label: "语言",
     icon: "💬",
@@ -275,7 +272,11 @@ function GameRoom({ room, you, game, conn, serverOffset }: GameRoomProps) {
         ) : (
           <section className={`arena reveal result-${turn?.result ?? "timeout"}`}>
             <div className="result-banner">
-              {turn?.result === "correct" ? "答对了！" : turn?.result === "skip" ? "跳过" : "时间到"}
+              {turn?.result === "correct"
+                ? "答对了！"
+                : turn?.result === "skip"
+                  ? "跳过"
+                  : "时间到"}
               {turn?.result === "correct" && <span className="result-sub">+1</span>}
             </div>
             <div className="word-card revealed" key={turn?.deadline}>
@@ -337,7 +338,11 @@ function ScreenTurn({
         </button>
       </div>
 
-      {game.round > 0 && <p className="screen-foot">第 {game.round} 轮 · 先到 {game.targetScore} 分</p>}
+      {game.round > 0 && (
+        <p className="screen-foot">
+          第 {game.round} 轮 · 先到 {game.targetScore} 分
+        </p>
+      )}
     </section>
   );
 }
@@ -382,9 +387,7 @@ function PhoneTurn({
       <div className={`phone-card${isDescriber ? " is-describer" : ""}`}>
         <span className="phone-emoji">{isDescriber ? "👀" : "🙈"}</span>
         <h2>{isDescriber ? "看电脑屏幕" : "把背转向电脑"}</h2>
-        <p className="phone-sub">
-          {isDescriber ? "你是描述者" : "别偷看，用耳朵和脑子"}
-        </p>
+        <p className="phone-sub">{isDescriber ? "你是描述者" : "别偷看，用耳朵和脑子"}</p>
         <p className="phone-hint">
           {isDescriber ? info.hint : `${turn.describerName} 正在用「${info.label}」描述`}
         </p>

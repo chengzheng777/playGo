@@ -89,7 +89,9 @@ async function main() {
   const networks = await fetch(`${BASE}/api/networks`).then((r) => r.json());
   check("网卡枚举返回端口", typeof networks.port === "number");
 
-  const qr = await fetch(`${BASE}/api/qr?text=${encodeURIComponent("http://192.168.1.2:8787/j/ABCD")}`);
+  const qr = await fetch(
+    `${BASE}/api/qr?text=${encodeURIComponent("http://192.168.1.2:8787/j/ABCD")}`,
+  );
   const qrBody = await qr.text();
   check("二维码接口返回 SVG", qr.ok && qrBody.includes("<svg"));
 
@@ -102,9 +104,7 @@ async function main() {
   check("创建房间返回 4 位房间码", /^[23456789A-HJ-NP-Z]{4}$/.test(code), code);
   check("房主拿到 token", typeof hostToken === "string" && hostToken.length === 32);
 
-  const createdState = await host.next(
-    (m) => m.type === "room.state" && m.data.room.code === code,
-  );
+  const createdState = await host.next((m) => m.type === "room.state" && m.data.room.code === code);
   check("建房时带上所选游戏", createdState.data.gameId === "yiyu");
 
   const list1 = await fetch(`${BASE}/api/rooms`).then((r) => r.json());
@@ -128,13 +128,19 @@ async function main() {
     host.next((m) => m.type === "chat.message"),
     guest.next((m) => m.type === "chat.message"),
   ]);
-  check("聊天广播到所有人", hostChat.data.text === "hello playGo" && guestChat.data.text === "hello playGo");
+  check(
+    "聊天广播到所有人",
+    hostChat.data.text === "hello playGo" && guestChat.data.text === "hello playGo",
+  );
 
   guest.close();
   const offline = await host.next(
     (m) => m.type === "room.state" && m.data.room.players.some((p) => !p.connected),
   );
-  check("断线标记为掉线", offline.data.room.players.some((p) => !p.connected));
+  check(
+    "断线标记为掉线",
+    offline.data.room.players.some((p) => !p.connected),
+  );
 
   const guest2 = new Client("玩家B-重连");
   await guest2.connect();
@@ -147,7 +153,10 @@ async function main() {
   const readyState = await host.next(
     (m) => m.type === "room.state" && m.data.room.players.some((p) => p.ready),
   );
-  check("准备状态同步", readyState.data.room.players.some((p) => p.ready));
+  check(
+    "准备状态同步",
+    readyState.data.room.players.some((p) => p.ready),
+  );
 
   const stranger = new Client("陌生人");
   await stranger.connect();
@@ -176,9 +185,7 @@ async function main() {
   check("房主修改规则并同步", settingsState.data.settings.roundSeconds === 45);
 
   guest2.send("game.settings", { settings: { targetScore: 9, roundSeconds: 30 } });
-  const settingsDenied = await guest2.next(
-    (m) => m.type === "error" && m.data.code === "NOT_HOST",
-  );
+  const settingsDenied = await guest2.next((m) => m.type === "error" && m.data.code === "NOT_HOST");
   check("非房主不能改规则", settingsDenied.data.code === "NOT_HOST");
 
   // 只有 1 名手机玩家（房主不参赛）时不能开始
@@ -198,13 +205,15 @@ async function main() {
       m.type === "room.state" &&
       m.data.room.players.some((p) => p.name === "Carol" && p.avatar.text === "🦊"),
   );
-  check("头像更新并广播", avatarState.data.room.players.find((p) => p.name === "Carol").avatar.color === "#38bdf8");
+  check(
+    "头像更新并广播",
+    avatarState.data.room.players.find((p) => p.name === "Carol").avatar.color === "#38bdf8",
+  );
 
   carol.send("player.ready", { ready: true });
   await host.next(
     (m) =>
-      m.type === "room.state" &&
-      m.data.room.players.some((p) => p.name === "Carol" && p.ready),
+      m.type === "room.state" && m.data.room.players.some((p) => p.name === "Carol" && p.ready),
   );
 
   host.send("game.start", {});
@@ -233,7 +242,10 @@ async function main() {
       team.members.every((member) => member.id !== hostStart.data.you.id),
     ),
   );
-  check("手机玩家分成两队", hostStart.data.game.teams.every((team) => team.members.length === 1));
+  check(
+    "手机玩家分成两队",
+    hostStart.data.game.teams.every((team) => team.members.length === 1),
+  );
   check("大屏能看到词", typeof hostStart.data.game.turn.word === "string");
   check("手机玩家看不到词", !bobStart.data.game.turn.word && !carolStart.data.game.turn.word);
 
@@ -252,8 +264,14 @@ async function main() {
   const reveal = await host.next(
     (m) => m.type === "room.state" && m.data.game?.turn?.result === "correct",
   );
-  check("大屏可以代为计分", reveal.data.game.teams.some((team) => team.score === 1));
-  check("非描述者玩家计分被忽略", reveal.data.game.teams.reduce((sum, team) => sum + team.score, 0) === 1);
+  check(
+    "大屏可以代为计分",
+    reveal.data.game.teams.some((team) => team.score === 1),
+  );
+  check(
+    "非描述者玩家计分被忽略",
+    reveal.data.game.teams.reduce((sum, team) => sum + team.score, 0) === 1,
+  );
 
   const nextRound = await host.next(
     (m) => m.type === "room.state" && m.data.game?.phase === "turn" && m.data.game.round === 2,
@@ -268,11 +286,12 @@ async function main() {
   round2Client?.send("game.action", { action: { type: "correct" } });
   const reveal2 = await host.next(
     (m) =>
-      m.type === "room.state" &&
-      m.data.game?.turn?.result === "correct" &&
-      m.data.game.round === 2,
+      m.type === "room.state" && m.data.game?.turn?.result === "correct" && m.data.game.round === 2,
   );
-  check("描述者自己也能计分", reveal2.data.game.teams.reduce((sum, team) => sum + team.score, 0) === 2);
+  check(
+    "描述者自己也能计分",
+    reveal2.data.game.teams.reduce((sum, team) => sum + team.score, 0) === 2,
+  );
 
   host.send("game.back", {});
   const backToLobby = await host.next(
@@ -292,11 +311,12 @@ async function main() {
   await host.next((m) => m.type === "room.state" && m.data.gameId === "uno");
 
   host.send("game.start", {});
-  const unoHost = await host.next(
-    (m) => m.type === "room.state" && m.data.uno?.phase === "turn",
-  );
+  const unoHost = await host.next((m) => m.type === "room.state" && m.data.uno?.phase === "turn");
   check("UNO 开局", unoHost.data.uno.players.length === 2);
-  check("UNO 每人 7 张", unoHost.data.uno.players.every((p) => p.handCount === 7));
+  check(
+    "UNO 每人 7 张",
+    unoHost.data.uno.players.every((p) => p.handCount === 7),
+  );
   check("大屏没有手牌", unoHost.data.uno.hand.length === 0);
 
   const bobUno = await guest2.next((m) => m.data.uno?.phase === "turn");
@@ -332,7 +352,10 @@ async function main() {
   check("大屏拿到目标色", /^#[0-9A-F]{6}$/i.test(colorHost.data.color.target.hex));
 
   const bobColor = await guest2.next((m) => m.data.color?.phase === "shoot");
-  check("手机能看到自己的状态", bobColor.data.color.players.some((p) => p.id === bobColor.data.you.id));
+  check(
+    "手机能看到自己的状态",
+    bobColor.data.color.players.some((p) => p.id === bobColor.data.you.id),
+  );
 
   guest2.send("game.action", {
     action: {
@@ -342,10 +365,12 @@ async function main() {
     },
   });
   const shot = await host.next(
-    (m) =>
-      m.type === "room.state" && m.data.color?.players.some((p) => p.submitted),
+    (m) => m.type === "room.state" && m.data.color?.players.some((p) => p.submitted),
   );
-  check("提交照片后标记已拍", shot.data.color.players.some((p) => p.submitted));
+  check(
+    "提交照片后标记已拍",
+    shot.data.color.players.some((p) => p.submitted),
+  );
 
   host.close();
   guest2.close();
@@ -354,10 +379,7 @@ async function main() {
 
   await new Promise((resolve) => setTimeout(resolve, 800));
   const list3 = await fetch(`${BASE}/api/rooms`).then((r) => r.json());
-  check(
-    "全员离线后房间从列表消失",
-    !list3.rooms.some((room) => room.code === code),
-  );
+  check("全员离线后房间从列表消失", !list3.rooms.some((room) => room.code === code));
 
   console.log(`\n通过 ${passed} 项，失败 ${failures.length} 项`);
   if (failures.length > 0) {

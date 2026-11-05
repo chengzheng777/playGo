@@ -1,19 +1,19 @@
 import { randomBytes } from "node:crypto";
+import { defaultAvatar } from "../shared/avatars";
 import {
   DEFAULT_SETTINGS,
   MAX_PLAYERS,
+  type Player,
   ROOM_CODE_ALPHABET,
   ROOM_CODE_LEN,
-  type Player,
   type Role,
   type Room,
   type RoomSummary,
   type YiyuSettings,
 } from "../shared/protocol";
-import type { YiyuGame } from "./games/yiyu";
-import type { UnoGame } from "./games/uno";
 import type { ColorGame } from "./games/color";
-import { defaultAvatar } from "../shared/avatars";
+import type { UnoGame } from "./games/uno";
+import type { YiyuGame } from "./games/yiyu";
 
 export interface RoomRecord {
   room: Room;
@@ -137,7 +137,8 @@ export class RoomManager {
     const record = this.rooms.get(code);
     if (!record) return { ok: false, error: "ROOM_NOT_FOUND" };
     if (record.room.phase !== "lobby") return { ok: false, error: "BAD_PHASE" };
-    if (record.room.players.length >= record.room.maxPlayers) return { ok: false, error: "ROOM_FULL" };
+    if (record.room.players.length >= record.room.maxPlayers)
+      return { ok: false, error: "ROOM_FULL" };
 
     const trimmed = name.trim().slice(0, 16);
     if (!trimmed) return { ok: false, error: "NAME_TAKEN" };
@@ -224,7 +225,11 @@ export class RoomManager {
     return true;
   }
 
-  setAvatar(code: string, playerId: string, avatar: { text: string; color: string }): Player | undefined {
+  setAvatar(
+    code: string,
+    playerId: string,
+    avatar: { text: string; color: string },
+  ): Player | undefined {
     const record = this.rooms.get(code);
     const player = record?.room.players.find((p) => p.id === playerId);
     if (!record || !player) return undefined;
@@ -255,7 +260,7 @@ export class RoomManager {
       const bytes = randomBytes(ROOM_CODE_LEN);
       let code = "";
       for (let i = 0; i < ROOM_CODE_LEN; i++) {
-        code += ROOM_CODE_ALPHABET[bytes[i]! % ROOM_CODE_ALPHABET.length];
+        code += ROOM_CODE_ALPHABET[bytes[i] % ROOM_CODE_ALPHABET.length];
       }
       if (!this.rooms.has(code)) return code;
     }

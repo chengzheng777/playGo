@@ -48,7 +48,11 @@ export function HomeView() {
           <h2>房间列表</h2>
           <div className="head-actions">
             <span className="count">{rooms ? `${rooms.length} 个房间` : "读取中"}</span>
-            <button className="btn btn-ghost btn-mini" onClick={loadRooms} aria-label="刷新房间列表">
+            <button
+              className="btn btn-ghost btn-mini"
+              onClick={loadRooms}
+              aria-label="刷新房间列表"
+            >
               ↻
             </button>
           </div>

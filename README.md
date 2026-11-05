@@ -69,14 +69,14 @@ pnpm dev
 
 ## 脚本
 
-| 命令 | 说明 |
-| --- | --- |
-| `pnpm dev` | 开发模式，Vite 中间件 + HMR，默认 8787 |
-| `pnpm build` | 构建前端到 `dist/` |
-| `pnpm start` | 生产模式，需先 build；`PORT=xxxx` 可改端口 |
-| `pnpm typecheck` | TypeScript 类型检查 |
-| `pnpm engine` | 一愚惊人规则引擎的单元冒烟测试（不需要起服务） |
-| `pnpm smoke` | 对着运行中的服务跑协议 + 游戏流程冒烟测试 |
+| 命令             | 说明                                           |
+| ---------------- | ---------------------------------------------- |
+| `pnpm dev`       | 开发模式，Vite 中间件 + HMR，默认 8787         |
+| `pnpm build`     | 构建前端到 `dist/`                             |
+| `pnpm start`     | 生产模式，需先 build；`PORT=xxxx` 可改端口     |
+| `pnpm typecheck` | TypeScript 类型检查                            |
+| `pnpm engine`    | 一愚惊人规则引擎的单元冒烟测试（不需要起服务） |
+| `pnpm smoke`     | 对着运行中的服务跑协议 + 游戏流程冒烟测试      |
 
 ## 目录
 
@@ -112,14 +112,16 @@ scripts/           冒烟测试
 
 ## 下一步
 
-| 阶段 | 内容 |
-| --- | --- |
-| M3 | 第二个游戏（你画我猜 / 谁是卧底），验证框架 |
-| M4 | 单文件 exe 分发 |
+| 阶段 | 内容                                        |
+| ---- | ------------------------------------------- |
+| M3   | 第二个游戏（你画我猜 / 谁是卧底），验证框架 |
+| M4   | 单文件 exe 分发                             |
 
 ## 文档
 
 - [设计与可行性评估](docs/DESIGN.md) —— 浏览器能力边界、通道选型、架构、局域网排障、里程碑
 - [通信协议 v0.1](docs/PROTOCOL.md) —— WebSocket 消息定义、房间状态、游戏视图、重连与错误码
+- [规格目录](specs/README.md) —— SDD 规格：每个游戏的规则、边界与验收标准
+- [贡献指南](CONTRIBUTING.md) —— 开发流程、提交规范、完成定义
 - [打包与分发](docs/PACKAGING.md) —— 单文件 exe 方案、Electron 与 Tauri 选型
 - [更新日志](CHANGELOG.md) —— 版本变更记录

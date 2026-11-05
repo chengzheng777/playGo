@@ -1,11 +1,12 @@
 import { useSyncExternalStore } from "react";
+import { defaultAvatar } from "../shared/avatars";
 import type {
   Avatar,
   ChatMessage,
   ClientMessage,
+  ColorView,
   ErrorCode,
   GameAction,
-  ColorView,
   Player,
   Room,
   ServerMessage,
@@ -14,7 +15,6 @@ import type {
   YiyuView,
 } from "../shared/protocol";
 import { DEFAULT_SETTINGS } from "../shared/protocol";
-import { defaultAvatar } from "../shared/avatars";
 
 const NAME_KEY = "playgo:name";
 const TOKEN_PREFIX = "playgo:token:";
@@ -85,7 +85,7 @@ function readToken(code: string): string | null {
 function readRoute(): { view: View; code: string } {
   const match = /^\/([jr])\/([A-Za-z0-9]{4})$/.exec(location.pathname);
   if (!match) return { view: "home", code: "" };
-  return { view: match[1] === "j" ? "join" : "lobby", code: match[2]!.toUpperCase() };
+  return { view: match[1] === "j" ? "join" : "lobby", code: match[2]?.toUpperCase() };
 }
 
 class Store {

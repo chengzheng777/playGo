@@ -16,9 +16,9 @@
 {
   "v": 1,
   "type": "room.join",
-  "id": "c-8f3a",        // 可选：客户端消息 ID，服务端用 ack 回应
-  "ts": 1762345678901,   // 客户端发送时间（毫秒），仅用于诊断
-  "data": { }
+  "id": "c-8f3a", // 可选：客户端消息 ID，服务端用 ack 回应
+  "ts": 1762345678901, // 客户端发送时间（毫秒），仅用于诊断
+  "data": {}
 }
 ```
 
@@ -30,26 +30,26 @@
 
 ## 2. 消息一览
 
-| type | 方向 | data | 说明 |
-| --- | --- | --- | --- |
-| `welcome` | S→C | `{clientId, protocol, serverTime}` | 连接建立后立即下发 |
-| `room.create` | C→S | `{name, role, gameId?, avatar?}` | 创建房间，可带上大厅里选好的游戏与本机头像 |
-| `room.created` | S→C | `{room, token}` | 仅创建者收到；`token` 用于重连 |
-| `room.join` | C→S | `{code, name, role, token?, avatar?}` | 加入；带 `token` 即重连 |
-| `room.state` | S→C | `{room, you, version, token, gameId, settings, game, uno, color, serverTime}` | 全量状态，任何变更后广播 |
-| `room.left` | S→C | `{playerId, reason}` | 玩家离开 |
-| `player.ready` | C→S | `{ready}` | 准备/取消 |
-| `player.update` | C→S | `{name?, avatar?}` | 修改用户资料，随后广播 |
-| `chat.send` | C→S | `{text}` | 文本 ≤ 200 字 |
-| `chat.message` | S→C | `{from, name, text, ts}` | |
-| `game.select` | C→S | `{gameId}` | 仅房主，仅大厅阶段 |
-| `game.settings` | C→S | `{settings}` | 仅房主、仅大厅；目标分 3–20，回合 15–180 秒 |
-| `game.start` | C→S | `{}` | 仅房主；至少 2 名已准备的手机玩家 |
-| `game.action` | C→S | `{action}` | 见第 7 节 |
-| `game.back` | C→S | `{}` | 仅房主；结束本局回大厅 |
-| `ping` / `pong` | C→S / S→C | `{t}` / `{t, serverTime}` | 心跳，5 秒一次 |
-| `ack` | S→C | `{id}` | 确认收到某条客户端消息 |
-| `error` | S→C | `{code, message, fatal}` | `fatal=true` 表示随后断开 |
+| type            | 方向      | data                                                                          | 说明                                        |
+| --------------- | --------- | ----------------------------------------------------------------------------- | ------------------------------------------- |
+| `welcome`       | S→C       | `{clientId, protocol, serverTime}`                                            | 连接建立后立即下发                          |
+| `room.create`   | C→S       | `{name, role, gameId?, avatar?}`                                              | 创建房间，可带上大厅里选好的游戏与本机头像  |
+| `room.created`  | S→C       | `{room, token}`                                                               | 仅创建者收到；`token` 用于重连              |
+| `room.join`     | C→S       | `{code, name, role, token?, avatar?}`                                         | 加入；带 `token` 即重连                     |
+| `room.state`    | S→C       | `{room, you, version, token, gameId, settings, game, uno, color, serverTime}` | 全量状态，任何变更后广播                    |
+| `room.left`     | S→C       | `{playerId, reason}`                                                          | 玩家离开                                    |
+| `player.ready`  | C→S       | `{ready}`                                                                     | 准备/取消                                   |
+| `player.update` | C→S       | `{name?, avatar?}`                                                            | 修改用户资料，随后广播                      |
+| `chat.send`     | C→S       | `{text}`                                                                      | 文本 ≤ 200 字                               |
+| `chat.message`  | S→C       | `{from, name, text, ts}`                                                      |                                             |
+| `game.select`   | C→S       | `{gameId}`                                                                    | 仅房主，仅大厅阶段                          |
+| `game.settings` | C→S       | `{settings}`                                                                  | 仅房主、仅大厅；目标分 3–20，回合 15–180 秒 |
+| `game.start`    | C→S       | `{}`                                                                          | 仅房主；至少 2 名已准备的手机玩家           |
+| `game.action`   | C→S       | `{action}`                                                                    | 见第 7 节                                   |
+| `game.back`     | C→S       | `{}`                                                                          | 仅房主；结束本局回大厅                      |
+| `ping` / `pong` | C→S / S→C | `{t}` / `{t, serverTime}`                                                     | 心跳，5 秒一次                              |
+| `ack`           | S→C       | `{id}`                                                                        | 确认收到某条客户端消息                      |
+| `error`         | S→C       | `{code, message, fatal}`                                                      | `fatal=true` 表示随后断开                   |
 
 ---
 
@@ -60,45 +60,45 @@ type Role = "screen" | "player" | "spectator";
 type Phase = "lobby" | "playing" | "ended";
 
 interface Player {
-  id: string;          // 服务端分配，稳定
-  name: string;        // 1–16 字
-  avatar: Avatar;      // { text, color }，默认取名字首字
+  id: string; // 服务端分配，稳定
+  name: string; // 1–16 字
+  avatar: Avatar; // { text, color }，默认取名字首字
   role: Role;
-  seat: number;        // 0 起，加入顺序
+  seat: number; // 0 起，加入顺序
   ready: boolean;
   connected: boolean;
   joinedAt: number;
-  latencyMs?: number;  // 由心跳估算
+  latencyMs?: number; // 由心跳估算
 }
 
 interface Avatar {
-  text: string;        // 1–2 个字符或一个 emoji
-  color: string;       // #rrggbb
+  text: string; // 1–2 个字符或一个 emoji
+  color: string; // #rrggbb
 }
 
 interface Room {
-  code: string;        // 4 位，去除易混字符
+  code: string; // 4 位，去除易混字符
   hostId: string;
   phase: Phase;
   players: Player[];
   createdAt: number;
-  maxPlayers: number;  // 默认 8
+  maxPlayers: number; // 默认 8
 }
 
 interface RoomState {
   room: Room;
-  you: Player;         // 当前连接对应的玩家
-  version: number;     // 单调递增，每次变更 +1
-  token: string;       // 本连接的重连凭证（每个玩家一份，只发给本人）
-  gameId: string | null;   // 房主选中的游戏
-  settings: YiyuSettings;  // 房主配置的规则
-  game: YiyuView | null;   // 当前游戏视图，按角色裁剪
-  serverTime: number;      // 用于客户端校准倒计时
+  you: Player; // 当前连接对应的玩家
+  version: number; // 单调递增，每次变更 +1
+  token: string; // 本连接的重连凭证（每个玩家一份，只发给本人）
+  gameId: string | null; // 房主选中的游戏
+  settings: YiyuSettings; // 房主配置的规则
+  game: YiyuView | null; // 当前游戏视图，按角色裁剪
+  serverTime: number; // 用于客户端校准倒计时
 }
 
 interface YiyuSettings {
-  targetScore: number;     // 默认 8，允许 3–20
-  roundSeconds: number;    // 默认 60，允许 15–180
+  targetScore: number; // 默认 8，允许 3–20
+  roundSeconds: number; // 默认 60，允许 15–180
 }
 ```
 
@@ -126,17 +126,17 @@ interface YiyuSettings {
 
 ## 5. 错误码
 
-| code | 含义 | fatal |
-| --- | --- | --- |
-| `PROTOCOL_ERROR` | 帧格式错误 / 超长 | ✅ |
-| `ROOM_NOT_FOUND` | 房间码不存在或已结束 | ❌ |
-| `ROOM_FULL` | 人数已达上限 | ❌ |
-| `NAME_TAKEN` | 昵称重复 | ❌ |
-| `BAD_TOKEN` | 重连 token 无效 | ❌ |
-| `NOT_HOST` | 非房主执行房主操作 | ❌ |
-| `BAD_PHASE` | 当前阶段不允许该操作 | ❌ |
-| `RATE_LIMITED` | 频率超限 | ❌ |
-| `INTERNAL` | 服务端异常 | ✅ |
+| code             | 含义                 | fatal |
+| ---------------- | -------------------- | ----- |
+| `PROTOCOL_ERROR` | 帧格式错误 / 超长    | ✅    |
+| `ROOM_NOT_FOUND` | 房间码不存在或已结束 | ❌    |
+| `ROOM_FULL`      | 人数已达上限         | ❌    |
+| `NAME_TAKEN`     | 昵称重复             | ❌    |
+| `BAD_TOKEN`      | 重连 token 无效      | ❌    |
+| `NOT_HOST`       | 非房主执行房主操作   | ❌    |
+| `BAD_PHASE`      | 当前阶段不允许该操作 | ❌    |
+| `RATE_LIMITED`   | 频率超限             | ❌    |
+| `INTERNAL`       | 服务端异常           | ✅    |
 
 ---
 
@@ -162,7 +162,12 @@ interface YiyuSettings {
 手机加入：
 
 ```json
-{ "v": 1, "type": "room.join", "id": "c-2", "data": { "code": "7K2M", "name": "小明", "role": "player" } }
+{
+  "v": 1,
+  "type": "room.join",
+  "id": "c-2",
+  "data": { "code": "7K2M", "name": "小明", "role": "player" }
+}
 ```
 
 ```json
@@ -190,12 +195,12 @@ interface YiyuView {
   gameId: "yiyu";
   phase: "turn" | "reveal" | "ended";
   round: number;
-  targetScore: number;      // 8
-  roundSeconds: number;     // 60
+  targetScore: number; // 8
+  roundSeconds: number; // 60
   teams: YiyuTeam[];
   turn: YiyuTurn | null;
   winnerTeam?: "A" | "B";
-  lastEvent: YiyuEvent | null;   // 客户端据此触发动画/音效/震动
+  lastEvent: YiyuEvent | null; // 客户端据此触发动画/音效/震动
 }
 
 interface YiyuTurn {
@@ -203,15 +208,15 @@ interface YiyuTurn {
   describerId: string;
   describerName: string;
   mode: "talk" | "act" | "lip" | "rush";
-  deadline: number;         // 服务端 epoch ms
-  word?: string;            // 只发给大屏（房主），或 turn 结束后才有
-  guesses: YiyuGuess[];     // 仅抢答模式
+  deadline: number; // 服务端 epoch ms
+  word?: string; // 只发给大屏（房主），或 turn 结束后才有
+  guesses: YiyuGuess[]; // 仅抢答模式
   result?: "correct" | "skip" | "timeout";
   winnerName?: string;
 }
 
 interface YiyuEvent {
-  id: number;               // 单调递增，客户端去重
+  id: number; // 单调递增，客户端去重
   kind: "turn" | "correct" | "skip" | "timeout" | "win";
   text: string;
 }
@@ -246,6 +251,7 @@ interface YiyuEvent {
 ---
 
 ## 8. M0 不实现（预留）
+
 - 二进制帧 / 增量补丁（`state.delta`）
 - 房间列表与发现（本机多房间）
 - 观战与角色切换
@@ -256,12 +262,12 @@ interface YiyuEvent {
 
 ## 9. HTTP 接口（与 WebSocket 同源）
 
-| 方法 | 路径 | 返回 | 说明 |
-| --- | --- | --- | --- |
-| GET | `/api/health` | `{ok, app, version, port, rooms, buildId}` | 健康检查；`buildId` 用于识别过期页面 |
-| GET | `/api/networks` | `{port, urls: [{ip, iface, kind}]}` | 生成二维码可用的局域网地址 |
-| GET | `/api/rooms` | `{rooms: RoomSummary[]}` | 大厅房间列表 |
-| GET | `/api/qr?text=` | `image/svg+xml` | 生成二维码，只接受 http(s) 文本 |
+| 方法 | 路径            | 返回                                       | 说明                                 |
+| ---- | --------------- | ------------------------------------------ | ------------------------------------ |
+| GET  | `/api/health`   | `{ok, app, version, port, rooms, buildId}` | 健康检查；`buildId` 用于识别过期页面 |
+| GET  | `/api/networks` | `{port, urls: [{ip, iface, kind}]}`        | 生成二维码可用的局域网地址           |
+| GET  | `/api/rooms`    | `{rooms: RoomSummary[]}`                   | 大厅房间列表                         |
+| GET  | `/api/qr?text=` | `image/svg+xml`                            | 生成二维码，只接受 http(s) 文本      |
 
 `RoomSummary` 只含公开信息：房间码、房主名、游戏、人数、阶段，不含玩家 token。
 `/api/rooms` 由客户端每 3 秒轮询一次，用来刷新大厅列表。
@@ -276,17 +282,17 @@ interface YiyuEvent {
 interface UnoView {
   gameId: "uno";
   phase: "turn" | "ended";
-  players: { id, name, avatar, handCount, connected }[];
+  players: { id; name; avatar; handCount; connected }[];
   turnPlayerId: string;
   direction: 1 | -1;
   currentColor: "red" | "yellow" | "green" | "blue";
   discardTop: UnoCard;
   drawCount: number;
-  hand: UnoCard[];        // 只有本人拿得到
-  playableIds: string[];  // 只有本人且轮到自己时才有值
-  mustDraw: boolean;      // 摸牌后可选择出或不出
+  hand: UnoCard[]; // 只有本人拿得到
+  playableIds: string[]; // 只有本人且轮到自己时才有值
+  mustDraw: boolean; // 摸牌后可选择出或不出
   winnerId?: string;
-  lastEvent: { id, text } | null;
+  lastEvent: { id; text } | null;
 }
 
 interface UnoCard {
@@ -320,20 +326,21 @@ interface UnoCard {
 interface ColorView {
   gameId: "color";
   phase: "shoot" | "reveal" | "ended";
-  round: number;          // 1..3
+  round: number; // 1..3
   totalRounds: number;
   target: { hex: string; name: string };
-  deadline: number;       // 本轮拍照截止
-  players: { id, name, avatar, submitted, score, connected }[];
+  deadline: number; // 本轮拍照截止
+  players: { id; name; avatar; submitted; score; connected }[];
   results: {
-    playerId; name;
-    rgb: { r, g, b };
-    distance: number;     // Lab ΔE，越小越接近
+    playerId;
+    name;
+    rgb: { r; g; b };
+    distance: number; // Lab ΔE，越小越接近
     points: number;
-    photo?: string;       // 只发给大屏（房主）
+    photo?: string; // 只发给大屏（房主）
   }[];
   winnerId?: string;
-  lastEvent: { id, text } | null;
+  lastEvent: { id; text } | null;
 }
 ```
 

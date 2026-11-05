@@ -36,9 +36,7 @@ export function PlayerList({
         ))}
       </ul>
 
-      {players.length === 1 && (
-        <p className="empty-hint">把二维码给朋友扫，人就来了。</p>
-      )}
+      {players.length === 1 && <p className="empty-hint">把二维码给朋友扫，人就来了。</p>}
     </section>
   );
 }

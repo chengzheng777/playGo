@@ -10,7 +10,7 @@ export function ChatPanel() {
   useEffect(() => {
     const node = listRef.current;
     if (node) node.scrollTop = node.scrollHeight;
-  }, [state.chat.length]);
+  }, []);
 
   function submit(event: FormEvent) {
     event.preventDefault();

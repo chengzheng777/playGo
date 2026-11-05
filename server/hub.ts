@@ -1,29 +1,29 @@
 import { randomUUID } from "node:crypto";
 import type { WebSocket } from "ws";
 import { z } from "zod";
+import { isPlayableGame } from "../shared/games";
 import {
-  MAX_CHAT_LEN,
-  MAX_NAME_LEN,
-  PROTOCOL_VERSION,
-  isRoomCode,
   type Avatar,
   type ChatMessage,
   type ClientMessage,
+  type ColorAction,
   type ErrorCode,
+  type GameAction,
+  isRoomCode,
+  MAX_CHAT_LEN,
+  MAX_NAME_LEN,
   type Player,
+  PROTOCOL_VERSION,
   type Role,
   type ServerMessage,
-  type GameAction,
-  type ColorAction,
   type UnoAction,
   type YiyuAction,
   type YiyuSettings,
 } from "../shared/protocol";
-import { isPlayableGame } from "../shared/games";
-import { RoomManager, type RoomRecord } from "./rooms";
-import { YiyuGame } from "./games/yiyu";
-import { UnoGame } from "./games/uno";
 import { ColorGame } from "./games/color";
+import { UnoGame } from "./games/uno";
+import { YiyuGame } from "./games/yiyu";
+import type { RoomManager, RoomRecord } from "./rooms";
 
 interface Conn {
   id: string;
@@ -274,7 +274,7 @@ export class Hub {
 
     switch (parsed.msg.type) {
       case "room.create":
-        return this.createRoom(
+        return void this.createRoom(
           conn,
           parsed.msg.data.name,
           parsed.msg.data.role,
@@ -282,27 +282,27 @@ export class Hub {
           parsed.msg.data.avatar,
         );
       case "room.join":
-        return this.joinRoom(conn, parsed.msg.data);
+        return void this.joinRoom(conn, parsed.msg.data);
       case "room.leave":
-        return this.leaveRoom(conn);
+        return void this.leaveRoom(conn);
       case "player.ready":
-        return this.setReady(conn, parsed.msg.data.ready);
+        return void this.setReady(conn, parsed.msg.data.ready);
       case "player.update":
-        return this.setProfile(conn, parsed.msg.data);
+        return void this.setProfile(conn, parsed.msg.data);
       case "chat.send":
-        return this.chat(conn, parsed.msg.data.text);
+        return void this.chat(conn, parsed.msg.data.text);
       case "game.select":
-        return this.selectGame(conn, parsed.msg.data.gameId);
+        return void this.selectGame(conn, parsed.msg.data.gameId);
       case "game.settings":
-        return this.setSettings(conn, parsed.msg.data.settings);
+        return void this.setSettings(conn, parsed.msg.data.settings);
       case "game.start":
-        return this.startGame(conn);
+        return void this.startGame(conn);
       case "game.action":
-        return this.gameAction(conn, parsed.msg.data.action);
+        return void this.gameAction(conn, parsed.msg.data.action);
       case "game.back":
-        return this.backToLobby(conn);
+        return void this.backToLobby(conn);
       case "ping":
-        return this.send(conn, {
+        return void this.send(conn, {
           v: 1,
           type: "pong",
           data: { t: parsed.msg.data.t, serverTime: Date.now() },
@@ -310,13 +310,7 @@ export class Hub {
     }
   }
 
-  private createRoom(
-    conn: Conn,
-    name: string,
-    role: Role,
-    gameId?: string,
-    avatar?: Avatar,
-  ): void {
+  private createRoom(conn: Conn, name: string, role: Role, gameId?: string, avatar?: Avatar): void {
     if (conn.roomCode) {
       this.replyError(conn, "BAD_PHASE", "你已经在一个房间里了");
       return;
@@ -499,9 +493,7 @@ export class Hub {
     }
 
     // 房主是大屏 / 主持人，不参赛；队伍只由手机玩家组成
-    const participants = record.room.players.filter(
-      (player) => player.id !== record.room.hostId,
-    );
+    const participants = record.room.players.filter((player) => player.id !== record.room.hostId);
     const connected = participants.filter((player) => player.connected);
     if (connected.length < 2) {
       this.replyError(conn, "BAD_PHASE", "至少需要 2 名玩家（房主是大屏，不参赛）");
@@ -518,11 +510,15 @@ export class Hub {
       record.game = null;
       record.color = null;
     } else if (record.gameId === "color") {
-      record.color = new ColorGame(record.room.players, {
-        hostId: record.room.hostId,
-        rounds: 3,
-        shootSeconds: 40,
-      }, Date.now());
+      record.color = new ColorGame(
+        record.room.players,
+        {
+          hostId: record.room.hostId,
+          rounds: 3,
+          shootSeconds: 40,
+        },
+        Date.now(),
+      );
       record.game = null;
       record.uno = null;
     } else {

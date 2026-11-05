@@ -145,10 +145,7 @@ export function UnoGameView() {
             <h2>{winner ? `${winner.name} 获胜` : "本局结束"}</h2>
             {isHost ? (
               <div className="winner-actions">
-                <button
-                  className="btn btn-primary btn-block"
-                  onClick={() => store.startGame()}
-                >
+                <button className="btn btn-primary btn-block" onClick={() => store.startGame()}>
                   再来一局
                 </button>
                 <button className="btn btn-ghost btn-block" onClick={() => store.backToLobby()}>

@@ -140,5 +140,5 @@ export function Confetti({ burst, rain }: { burst: number; rain: boolean }) {
     }
   }, [burst]);
 
-  return <canvas ref={canvasRef} className="confetti" aria-hidden="true" />;
+  return <canvas ref={canvasRef} className="confetti" />;
 }

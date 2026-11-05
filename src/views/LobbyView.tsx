@@ -2,9 +2,9 @@ import type { CSSProperties } from "react";
 import { useState } from "react";
 import { GAME_CATALOG, getGameMeta } from "../../shared/games";
 import { AvatarBadge } from "../components/Avatar";
-import { ProfileEditor } from "../components/ProfileEditor";
 import { ChatPanel } from "../components/ChatPanel";
 import { PlayerList } from "../components/PlayerList";
+import { ProfileEditor } from "../components/ProfileEditor";
 import { QrCard } from "../components/QrCard";
 import { store, useAppState } from "../store";
 
@@ -57,11 +57,7 @@ export function LobbyView() {
           <span>房间</span>
           <b>{room.code}</b>
         </div>
-        <button
-          className="avatar-btn"
-          onClick={() => setAvatarOpen(true)}
-          aria-label="换个头像"
-        >
+        <button className="avatar-btn" onClick={() => setAvatarOpen(true)} aria-label="换个头像">
           <AvatarBadge avatar={you.avatar} size={30} />
         </button>
         <div className={`status status-${state.conn}`}>
@@ -133,9 +129,7 @@ export function LobbyView() {
                     <span className="cg-emoji">{getGameMeta(selected)?.emoji ?? "🎲"}</span>
                     <div>
                       <div className="cg-name">{getGameMeta(selected)?.name ?? selected}</div>
-                      <div className="cg-tag">
-                        {getGameMeta(selected)?.tagline ?? ""}
-                      </div>
+                      <div className="cg-tag">{getGameMeta(selected)?.tagline ?? ""}</div>
                     </div>
                   </div>
 
@@ -201,9 +195,7 @@ export function LobbyView() {
                       key={value}
                       type="button"
                       className={settings.roundSeconds === value ? "on" : ""}
-                      onClick={() =>
-                        store.updateSettings({ ...settings, roundSeconds: value })
-                      }
+                      onClick={() => store.updateSettings({ ...settings, roundSeconds: value })}
                     >
                       {value}s
                     </button>
