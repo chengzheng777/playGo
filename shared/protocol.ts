@@ -149,7 +149,11 @@ export type ClientMessage =
   | (Envelope & { type: "ping"; data: { t: number } });
 
 export type ServerMessage =
-  | { v: 1; type: "welcome"; data: { clientId: string; protocol: number; serverTime: number } }
+  | {
+      v: 1;
+      type: "welcome";
+      data: { clientId: string; protocol: number; serverTime: number; buildId: string };
+    }
   | { v: 1; type: "room.created"; data: { room: Room; you: Player; token: string } }
   | { v: 1; type: "room.state"; data: RoomStatePayload }
   | { v: 1; type: "chat.message"; data: ChatMessage }

@@ -792,6 +792,16 @@ select {
   color: var(--game-accent);
 }
 
+.game-card.viewer:not(.selected) {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.game-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .game-rule {
   padding-top: 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);

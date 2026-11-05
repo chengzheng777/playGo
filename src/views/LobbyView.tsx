@@ -34,6 +34,13 @@ export function LobbyView() {
   ).length;
   const selected = state.gameId;
   const canStart = Boolean(selected) && connected.length >= 2 && needReady === 0;
+  const startLabel = !selected
+    ? "先选一个游戏"
+    : connected.length < 2
+      ? "至少需要 2 名玩家"
+      : needReady > 0
+        ? `还差 ${needReady} 人准备`
+        : "开始游戏";
 
   return (
     <div className="lobby">
@@ -72,6 +79,7 @@ export function LobbyView() {
                       "game-card",
                       isSelected ? "selected" : "",
                       meta.available ? "" : "locked",
+                      isHost ? "" : "viewer",
                     ]
                       .filter(Boolean)
                       .join(" ")}
@@ -90,6 +98,10 @@ export function LobbyView() {
                 );
               })}
             </div>
+
+            {!isHost && (
+              <p className="game-hint">只有房主能选游戏，你可以先点下面的「准备」。</p>
+            )}
 
             {selected === "yiyu" && (
               <p className="game-rule">
@@ -114,14 +126,14 @@ export function LobbyView() {
               disabled={!canStart}
               onClick={() => store.startGame()}
             >
-              {!selected
-                ? "先选一个游戏"
-                : needReady > 0
-                  ? `还差 ${needReady} 人准备`
-                  : "开始游戏"}
+              {startLabel}
             </button>
             <span className="ready-summary">
-              {connected.length < 2 ? "至少需要 2 名玩家" : "玩家准备后即可开始"}
+              {connected.length < 2
+                ? "让朋友扫码加入，2 人以上才能开始"
+                : needReady > 0
+                  ? "等大家点准备"
+                  : "都准备好了"}
             </span>
           </div>
         ) : (

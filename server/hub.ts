@@ -124,7 +124,10 @@ export class Hub {
   private readonly conns = new Map<string, Conn>();
   private readonly removalTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-  constructor(private readonly rooms: RoomManager) {}
+  constructor(
+    private readonly rooms: RoomManager,
+    private readonly buildId: string,
+  ) {}
 
   attach(ws: WebSocket): void {
     const conn: Conn = {
@@ -140,7 +143,12 @@ export class Hub {
     this.send(conn, {
       v: 1,
       type: "welcome",
-      data: { clientId: conn.id, protocol: PROTOCOL_VERSION, serverTime: Date.now() },
+      data: {
+        clientId: conn.id,
+        protocol: PROTOCOL_VERSION,
+        serverTime: Date.now(),
+        buildId: this.buildId,
+      },
     });
 
     ws.on("message", (raw) => {
@@ -336,7 +344,10 @@ export class Hub {
 
   private selectGame(conn: Conn, gameId: string): void {
     const record = this.roomOf(conn);
-    if (!record) return;
+    if (!record) {
+      this.replyError(conn, "ROOM_NOT_FOUND", "房间已失效，请重新创建");
+      return;
+    }
     if (!this.isHost(conn, record)) return;
     if (record.room.phase !== "lobby") {
       this.replyError(conn, "BAD_PHASE", "游戏进行中不能换游戏");
@@ -353,7 +364,10 @@ export class Hub {
 
   private startGame(conn: Conn): void {
     const record = this.roomOf(conn);
-    if (!record) return;
+    if (!record) {
+      this.replyError(conn, "ROOM_NOT_FOUND", "房间已失效，请重新创建");
+      return;
+    }
     if (!this.isHost(conn, record)) return;
 
     if (record.room.phase === "playing") {

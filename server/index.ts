@@ -95,7 +95,7 @@ function serveStatic(res: http.ServerResponse, pathname: string): void {
 
 const port = await pickPort();
 const rooms = new RoomManager();
-const hub = new Hub(rooms);
+const hub = new Hub(rooms, crypto.randomUUID());
 
 let vite: import("vite").ViteDevServer | undefined;
 if (!isProd) {

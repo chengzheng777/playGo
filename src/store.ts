@@ -324,7 +324,10 @@ class Store {
 
   private onMessage(message: ServerMessage): void {
     switch (message.type) {
-      case "welcome":
+      case "welcome": {
+        this.checkBuild(message.data.buildId);
+        return;
+      }
       case "pong":
       case "ack":
         return;
@@ -375,6 +378,19 @@ class Store {
         this.onError(message.data.code, message.data.message);
         return;
       }
+    }
+  }
+
+  /** 服务端重启后，旧页面里的代码可能已经过期，整页刷新拿新版本 */
+  private checkBuild(buildId: string): void {
+    try {
+      const previous = sessionStorage.getItem("playgo:build");
+      sessionStorage.setItem("playgo:build", buildId);
+      if (previous && previous !== buildId) {
+        location.reload();
+      }
+    } catch {
+      /* ignore */
     }
   }
 
