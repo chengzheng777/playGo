@@ -28,7 +28,7 @@ jobs:
       - name: 覆盖率
         run: pnpm coverage
 
-      - uses: browser-actions/setup-chrome@v1
+      - uses: browser-actions/setup-chrome@v2
         id: chrome
 
       - name: 起服务，跑协议冒烟与 E2E
