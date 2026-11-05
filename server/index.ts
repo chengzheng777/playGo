@@ -169,7 +169,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
   }
 }
 
-const wss = new WebSocketServer({ noServer: true });
+const wss = new WebSocketServer({ noServer: true, maxPayload: 512 * 1024 });
 wss.on("connection", (ws) => hub.attach(ws));
 
 server.on("upgrade", (req, socket, head) => {

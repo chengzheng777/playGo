@@ -39,6 +39,8 @@ interface Conn {
 const RATE_LIMIT_PER_SEC = 40;
 const CHAT_COOLDOWN_MS = 600;
 const RECONNECT_GRACE_MS = 90_000;
+/** 单帧上限：拍颜色的照片是 base64，360px JPEG 大约 20–60 KB，留足余量 */
+const MAX_FRAME_CHARS = 512 * 1024;
 
 const roleSchema = z.enum(["screen", "player", "spectator"]);
 const nameSchema = z.string().trim().min(1).max(MAX_NAME_LEN);
@@ -248,7 +250,7 @@ export class Hub {
   }
 
   private onMessage(conn: Conn, raw: string): void {
-    if (raw.length > 64 * 1024) {
+    if (raw.length > MAX_FRAME_CHARS) {
       this.fail(conn, "PROTOCOL_ERROR", "消息过大");
       return;
     }
