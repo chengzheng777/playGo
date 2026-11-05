@@ -80,35 +80,24 @@ export function LobbyView() {
           {isHost ? (
             <section className="panel games-panel">
               <div className="panel-head">
-                <h2>选择游戏</h2>
+                <h2>游戏</h2>
                 <span className="count">开局前可换</span>
               </div>
 
-              <div className="game-grid">
-                {GAME_CATALOG.map((meta) => {
+              <div className="game-pills">
+                {GAME_CATALOG.filter((meta) => meta.available).map((meta) => {
                   const isSelected = selected === meta.id;
                   return (
                     <button
                       key={meta.id}
                       type="button"
-                      className={[
-                        "game-card",
-                        isSelected ? "selected" : "",
-                        meta.available ? "" : "locked",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
+                      className={`game-pill${isSelected ? " on" : ""}`}
                       style={{ "--game-accent": meta.accent } as CSSProperties}
-                      disabled={!meta.available}
                       onClick={() => store.selectGame(meta.id)}
                     >
-                      <span className="game-emoji">{meta.emoji}</span>
-                      <span className="game-name">{meta.name}</span>
-                      <span className="game-tagline">{meta.tagline}</span>
-                      <span className="game-meta">
-                        {meta.available ? meta.players : "即将上线"}
-                      </span>
-                      {isSelected && <span className="game-check">✓</span>}
+                      <span className="game-pill-emoji">{meta.emoji}</span>
+                      <span>{meta.name}</span>
+                      {isSelected && <span className="game-pill-check">✓</span>}
                     </button>
                   );
                 })}

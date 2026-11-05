@@ -1850,3 +1850,49 @@ select {
   font-size: 12px;
   color: var(--muted);
 }
+
+/* 房间内只做游戏切换，不放大厅目录 */
+.game-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.game-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.game-pill:hover {
+  color: var(--text);
+}
+
+.game-pill.on {
+  border-color: var(--game-accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--game-accent) 16%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--game-accent) 45%, transparent) inset;
+}
+
+.game-pill-emoji {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.game-pill-check {
+  font-size: 12px;
+  color: var(--game-accent);
+}
