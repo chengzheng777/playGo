@@ -1,5 +1,7 @@
 # playGo
 
+[![CI](https://github.com/chengzheng777/playGo/actions/workflows/ci.yml/badge.svg)](https://github.com/chengzheng777/playGo/actions/workflows/ci.yml)
+
 局域网多人 Web 游戏平台：PC 起本地服务并创建房间，手机扫码即加入。
 
 ## 状态
@@ -10,6 +12,8 @@
 ## 快速开始
 
 ```bash
+git clone https://github.com/chengzheng777/playGo.git
+cd playGo
 pnpm install
 pnpm dev
 ```
