@@ -310,6 +310,43 @@ async function main() {
   );
   check("UNO 摸牌生效", true);
 
+  // ---- 拍颜色 ----
+  console.log("\n拍颜色");
+  host.send("game.back", {});
+  await host.next((m) => m.type === "room.state" && m.data.room.phase === "lobby");
+
+  guest2.send("player.ready", { ready: true });
+  carol.send("player.ready", { ready: true });
+  await host.next(
+    (m) => m.type === "room.state" && m.data.room.players.filter((p) => p.ready).length >= 2,
+  );
+
+  host.send("game.select", { gameId: "color" });
+  await host.next((m) => m.type === "room.state" && m.data.gameId === "color");
+  host.send("game.start", {});
+
+  const colorHost = await host.next(
+    (m) => m.type === "room.state" && m.data.color?.phase === "shoot",
+  );
+  check("拍颜色开局", colorHost.data.color.totalRounds === 3);
+  check("大屏拿到目标色", /^#[0-9A-F]{6}$/i.test(colorHost.data.color.target.hex));
+
+  const bobColor = await guest2.next((m) => m.data.color?.phase === "shoot");
+  check("手机能看到自己的状态", bobColor.data.color.players.some((p) => p.id === bobColor.data.you.id));
+
+  guest2.send("game.action", {
+    action: {
+      type: "shoot",
+      rgb: { r: 200, g: 120, b: 90 },
+      photo: `data:image/jpeg;base64,${"A".repeat(64)}`,
+    },
+  });
+  const shot = await host.next(
+    (m) =>
+      m.type === "room.state" && m.data.color?.players.some((p) => p.submitted),
+  );
+  check("提交照片后标记已拍", shot.data.color.players.some((p) => p.submitted));
+
   host.close();
   guest2.close();
   carol.close();

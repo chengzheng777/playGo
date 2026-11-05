@@ -6,6 +6,7 @@ import { JoinView } from "./views/JoinView";
 import { LobbyView } from "./views/LobbyView";
 import { OnboardingView } from "./views/OnboardingView";
 import { UnoGameView } from "./views/UnoView";
+import { ColorGameView } from "./views/ColorView";
 
 export function App() {
   const state = useAppState();
@@ -19,7 +20,15 @@ export function App() {
           {state.view === "home" && <HomeView />}
           {state.view === "join" && <JoinView />}
           {state.view === "lobby" &&
-            (state.game ? <GameView /> : state.uno ? <UnoGameView /> : <LobbyView />)}
+            (state.game ? (
+              <GameView />
+            ) : state.uno ? (
+              <UnoGameView />
+            ) : state.color ? (
+              <ColorGameView />
+            ) : (
+              <LobbyView />
+            ))}
         </>
       )}
       {state.error && <Toast key={state.error} text={state.error} onDone={store.clearError} />}

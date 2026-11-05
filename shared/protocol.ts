@@ -73,6 +73,7 @@ export interface RoomStatePayload {
   settings: YiyuSettings;
   game: YiyuView | null;
   uno: UnoView | null;
+  color: ColorView | null;
 }
 
 /** 房主可改的规则，开局时生效 */
@@ -188,7 +189,49 @@ export type UnoAction =
   | { type: "draw" }
   | { type: "pass" };
 
-export type GameAction = YiyuAction | UnoAction;
+export interface ColorTarget {
+  hex: string;
+  name: string;
+}
+
+export interface ColorPlayerView {
+  id: string;
+  name: string;
+  avatar: Avatar;
+  submitted: boolean;
+  score: number;
+  connected: boolean;
+}
+
+export interface ColorResultView {
+  playerId: string;
+  name: string;
+  rgb: { r: number; g: number; b: number };
+  distance: number;
+  points: number;
+  photo?: string;
+}
+
+export interface ColorView {
+  gameId: "color";
+  phase: "shoot" | "reveal" | "ended";
+  round: number;
+  totalRounds: number;
+  target: ColorTarget;
+  deadline: number;
+  players: ColorPlayerView[];
+  results: ColorResultView[];
+  winnerId?: string;
+  lastEvent: { id: number; text: string } | null;
+}
+
+export type ColorAction = {
+  type: "shoot";
+  rgb: { r: number; g: number; b: number };
+  photo: string;
+};
+
+export type GameAction = YiyuAction | UnoAction | ColorAction;
 
 export type ErrorCode =
   | "PROTOCOL_ERROR"

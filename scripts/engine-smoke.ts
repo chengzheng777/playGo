@@ -9,6 +9,7 @@ import type { Player, YiyuView } from "../shared/protocol";
 import { defaultAvatar } from "../shared/avatars";
 import { YiyuGame } from "../server/games/yiyu";
 import { UnoGame } from "../server/games/uno";
+import { ColorGame } from "../server/games/color";
 
 const HOST_ID = "p1";
 
@@ -185,6 +186,49 @@ console.log("\nUNO");
   }
   check("UNO 能打到结束", uno.phase === "ended");
   check("UNO 有获胜者", typeof uno.winnerId === "string");
+}
+
+// --- 拍颜色 ---
+console.log("\n拍颜色");
+{
+  const colorPlayers = players.filter((player) => player.id !== HOST_ID);
+  const game = new ColorGame(colorPlayers, { hostId: HOST_ID, rounds: 2, shootSeconds: 10 }, 0);
+  const hostView = game.viewFor(HOST_ID);
+  check("拍颜色开局", hostView.phase === "shoot");
+  check("给出目标颜色", /^#[0-9A-F]{6}$/i.test(hostView.target.hex));
+
+  const hex = hostView.target.hex;
+  const targetRgb = {
+    r: Number.parseInt(hex.slice(1, 3), 16),
+    g: Number.parseInt(hex.slice(3, 5), 16),
+    b: Number.parseInt(hex.slice(5, 7), 16),
+  };
+  const photo = `data:image/jpeg;base64,${"A".repeat(64)}`;
+  const [first, second, third] = colorPlayers;
+
+  game.action(first!.id, { type: "shoot", rgb: targetRgb, photo }, 1000);
+  game.action(second!.id, { type: "shoot", rgb: { r: 0, g: 0, b: 0 }, photo }, 1100);
+  game.action(third!.id, { type: "shoot", rgb: { r: 255, g: 255, b: 255 }, photo }, 1200);
+
+  const revealed = game.viewFor(HOST_ID);
+  check("全部提交后揭晓", revealed.phase === "reveal");
+  check("最接近的排第一", revealed.results[0]?.playerId === first!.id);
+  check("第一名拿 10 分", revealed.results[0]?.points === 10);
+  check("大屏能看到照片", typeof revealed.results[0]?.photo === "string");
+  check(
+    "玩家看不到别人照片",
+    game.viewFor(second!.id).results.every((result) => result.photo === undefined),
+  );
+
+  game.tick(1200 + 9000);
+  check("进入第二轮", game.round === 2 && game.phase === "shoot");
+
+  game.action(first!.id, { type: "shoot", rgb: targetRgb, photo }, 20000);
+  game.action(second!.id, { type: "shoot", rgb: targetRgb, photo }, 20100);
+  game.action(third!.id, { type: "shoot", rgb: targetRgb, photo }, 20200);
+  game.tick(20200 + 9000);
+  check("两轮后结束", game.phase === "ended");
+  check("有获胜者", typeof game.winnerId === "string");
 }
 
 // --- 掉线 ---

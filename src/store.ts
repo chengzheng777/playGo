@@ -5,6 +5,7 @@ import type {
   ClientMessage,
   ErrorCode,
   GameAction,
+  ColorView,
   Player,
   Room,
   ServerMessage,
@@ -44,6 +45,7 @@ export interface AppState {
   settings: YiyuSettings;
   game: YiyuView | null;
   uno: UnoView | null;
+  color: ColorView | null;
   /** 服务端时间 - 本地时间，用于倒计时校准 */
   serverOffset: number;
 }
@@ -117,6 +119,7 @@ class Store {
       settings: { ...DEFAULT_SETTINGS },
       game: null,
       uno: null,
+      color: null,
       serverOffset: 0,
     };
 
@@ -296,6 +299,7 @@ class Store {
       settings: { ...DEFAULT_SETTINGS },
       game: null,
       uno: null,
+      color: null,
     });
     history.replaceState(null, "", "/");
   }
@@ -444,13 +448,14 @@ class Store {
           settings: { ...DEFAULT_SETTINGS },
           game: null,
           uno: null,
+          color: null,
         });
         history.replaceState(null, "", `/r/${room.code}`);
         return;
       }
 
       case "room.state": {
-        const { room, you, version, token, gameId, settings, game, uno, serverTime } =
+        const { room, you, version, token, gameId, settings, game, uno, color, serverTime } =
           message.data;
         this.applySession(room.code, token);
         const wasLobby = this.state.view === "lobby";
@@ -465,6 +470,7 @@ class Store {
           settings,
           game,
           uno,
+          color,
           serverOffset: serverTime - Date.now(),
         });
         if (!wasLobby) history.replaceState(null, "", `/r/${room.code}`);
@@ -514,6 +520,7 @@ class Store {
         settings: { ...DEFAULT_SETTINGS },
         game: null,
         uno: null,
+        color: null,
       });
       history.replaceState(null, "", "/");
       return;

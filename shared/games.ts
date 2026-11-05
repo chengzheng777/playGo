@@ -3,7 +3,7 @@
  * 只描述「有哪些游戏、能不能玩」，具体规则在服务端 game 模块里。
  */
 
-export type GameId = "yiyu" | "draw" | "undercover" | "uno";
+export type GameId = "yiyu" | "color" | "draw" | "undercover" | "uno";
 
 export interface GameMeta {
   id: GameId;
@@ -23,6 +23,15 @@ export const GAME_CATALOG: readonly GameMeta[] = [
     players: "2–8 人 · 分队对抗",
     emoji: "🎭",
     accent: "#8b5cf6",
+    available: true,
+  },
+  {
+    id: "color",
+    name: "拍颜色",
+    tagline: "拍出最接近的颜色",
+    players: "2–8 人 · 相机",
+    emoji: "🎨",
+    accent: "#fb7185",
     available: true,
   },
   {

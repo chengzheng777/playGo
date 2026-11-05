@@ -36,7 +36,7 @@
 | `room.create` | C→S | `{name, role, gameId?, avatar?}` | 创建房间，可带上大厅里选好的游戏与本机头像 |
 | `room.created` | S→C | `{room, token}` | 仅创建者收到；`token` 用于重连 |
 | `room.join` | C→S | `{code, name, role, token?, avatar?}` | 加入；带 `token` 即重连 |
-| `room.state` | S→C | `{room, you, version, token, gameId, settings, game, uno, serverTime}` | 全量状态，任何变更后广播 |
+| `room.state` | S→C | `{room, you, version, token, gameId, settings, game, uno, color, serverTime}` | 全量状态，任何变更后广播 |
 | `room.left` | S→C | `{playerId, reason}` | 玩家离开 |
 | `player.ready` | C→S | `{ready}` | 准备/取消 |
 | `player.update` | C→S | `{name?, avatar?}` | 修改用户资料，随后广播 |
@@ -309,3 +309,44 @@ interface UnoCard {
 - `draw`：摸一张；摸到可出的牌会进入「可出 / 不出」选择，否则自动跳过。
 - `pass`：只在 `mustDraw` 时有效。
 - 大屏（房主）不参赛，拿到的 `hand` 永远为空。
+
+---
+
+## 11. 拍颜色
+
+房间选中 `color` 时，`room.state.color` 是 `ColorView`：
+
+```ts
+interface ColorView {
+  gameId: "color";
+  phase: "shoot" | "reveal" | "ended";
+  round: number;          // 1..3
+  totalRounds: number;
+  target: { hex: string; name: string };
+  deadline: number;       // 本轮拍照截止
+  players: { id, name, avatar, submitted, score, connected }[];
+  results: {
+    playerId; name;
+    rgb: { r, g, b };
+    distance: number;     // Lab ΔE，越小越接近
+    points: number;
+    photo?: string;       // 只发给大屏（房主）
+  }[];
+  winnerId?: string;
+  lastEvent: { id, text } | null;
+}
+```
+
+动作：
+
+```jsonc
+{
+  "type": "shoot",
+  "rgb": { "r": 62, "g": 180, "b": 137 },
+  "photo": "data:image/jpeg;base64,..."
+}
+```
+
+- 客户端用系统相机拍完，压到最长边 360px，取中心 44% 区域的平均色，一起发上来。
+- `photo` 只接受 `data:image/` 且不超过 320 KB；照片只在大屏的揭晓视图里下发。
+- 所有在线玩家都提交会提前揭晓，否则 40 秒到点揭晓；揭晓 9 秒后进入下一轮，3 轮结束。

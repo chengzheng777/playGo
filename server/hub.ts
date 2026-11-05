@@ -14,6 +14,7 @@ import {
   type Role,
   type ServerMessage,
   type GameAction,
+  type ColorAction,
   type UnoAction,
   type YiyuAction,
   type YiyuSettings,
@@ -22,6 +23,7 @@ import { isPlayableGame } from "../shared/games";
 import { RoomManager, type RoomRecord } from "./rooms";
 import { YiyuGame } from "./games/yiyu";
 import { UnoGame } from "./games/uno";
+import { ColorGame } from "./games/color";
 
 interface Conn {
   id: string;
@@ -84,6 +86,15 @@ const gameActionSchema = z.object({
     }),
     z.object({ type: z.literal("draw") }),
     z.object({ type: z.literal("pass") }),
+    z.object({
+      type: z.literal("shoot"),
+      rgb: z.object({
+        r: z.number().min(0).max(255),
+        g: z.number().min(0).max(255),
+        b: z.number().min(0).max(255),
+      }),
+      photo: z.string().min(32).max(320_000),
+    }),
   ]),
 });
 
@@ -227,11 +238,12 @@ export class Hub {
   /** 推进所有进行中的游戏（倒计时、揭晓后进入下一回合） */
   tickGames(now = Date.now()): void {
     for (const record of this.rooms.all()) {
-      if (!record.game) continue;
-      if (record.game.tick(now)) {
-        record.version += 1;
-        this.broadcast(record.room.code);
-      }
+      let changed = false;
+      if (record.game?.tick(now)) changed = true;
+      if (record.color?.tick(now)) changed = true;
+      if (!changed) continue;
+      record.version += 1;
+      this.broadcast(record.room.code);
     }
   }
 
@@ -353,6 +365,7 @@ export class Hub {
     this.clearRemovalTimer(data.code, result.player.id);
     result.record.game?.setConnected(result.player.id, true);
     result.record.uno?.setConnected(result.player.id, true);
+    result.record.color?.setConnected(result.player.id, true);
     this.send(conn, this.stateFor(result.record, result.player));
     this.broadcast(data.code);
   }
@@ -366,6 +379,7 @@ export class Hub {
     const record = this.rooms.get(roomCode);
     record?.game?.setConnected(playerId, false);
     record?.uno?.setConnected(playerId, false);
+    record?.color?.setConnected(playerId, false);
     this.rooms.removePlayer(roomCode, playerId);
     this.broadcast(roomCode);
   }
@@ -500,6 +514,15 @@ export class Hub {
     if (record.gameId === "uno") {
       record.uno = new UnoGame(participants, Date.now());
       record.game = null;
+      record.color = null;
+    } else if (record.gameId === "color") {
+      record.color = new ColorGame(record.room.players, {
+        hostId: record.room.hostId,
+        rounds: 3,
+        shootSeconds: 40,
+      }, Date.now());
+      record.game = null;
+      record.uno = null;
     } else {
       record.game = new YiyuGame(
         record.room.players,
@@ -507,6 +530,7 @@ export class Hub {
         Date.now(),
       );
       record.uno = null;
+      record.color = null;
     }
     record.room.phase = "playing";
     record.version += 1;
@@ -523,6 +547,8 @@ export class Hub {
       changed = record.game.action(conn.playerId, action as YiyuAction, now);
     } else if (record.uno) {
       changed = record.uno.action(conn.playerId, action as UnoAction, now);
+    } else if (record.color) {
+      changed = record.color.action(conn.playerId, action as ColorAction, now);
     }
 
     if (changed) {
@@ -540,6 +566,7 @@ export class Hub {
     record.room.phase = "lobby";
     record.game = null;
     record.uno = null;
+    record.color = null;
     for (const player of record.room.players) player.ready = false;
     record.version += 1;
     this.broadcast(record.room.code);
@@ -558,6 +585,7 @@ export class Hub {
     player.connected = false;
     record.game?.setConnected(playerId, false);
     record.uno?.setConnected(playerId, false);
+    record.color?.setConnected(playerId, false);
     record.version += 1;
     this.broadcast(roomCode);
     this.scheduleRemoval(roomCode, playerId);
@@ -621,6 +649,7 @@ export class Hub {
         settings: { ...record.settings },
         game: record.game?.viewFor(player.id) ?? null,
         uno: record.uno?.viewFor(player.id) ?? null,
+        color: record.color?.viewFor(player.id) ?? null,
       },
     };
   }
