@@ -95,7 +95,8 @@ function serveStatic(res: http.ServerResponse, pathname: string): void {
 
 const port = await pickPort();
 const rooms = new RoomManager();
-const hub = new Hub(rooms, crypto.randomUUID());
+const buildId = crypto.randomUUID();
+const hub = new Hub(rooms, buildId);
 
 let vite: import("vite").ViteDevServer | undefined;
 if (!isProd) {
@@ -117,12 +118,24 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
   try {
     if (url.pathname === "/api/health") {
-      json(res, 200, { ok: true, app: "playGo", version: "0.1.0", port, rooms: rooms.size });
+      json(res, 200, {
+        ok: true,
+        app: "playGo",
+        version: "0.1.0",
+        port,
+        rooms: rooms.size,
+        buildId,
+      });
       return;
     }
 
     if (url.pathname === "/api/networks") {
       json(res, 200, { port, urls: lanAddresses() });
+      return;
+    }
+
+    if (url.pathname === "/api/rooms") {
+      json(res, 200, { rooms: rooms.list() });
       return;
     }
 

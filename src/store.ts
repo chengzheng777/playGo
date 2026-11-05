@@ -111,6 +111,24 @@ class Store {
         this.openSocket(true);
       }
     });
+
+    // 页面加载时先核对服务端版本，避免旧标签页带着过时代码去建房/加入
+    void this.syncBuild();
+  }
+
+  private async syncBuild(): Promise<void> {
+    try {
+      const response = await fetch("/api/health", { cache: "no-store" });
+      const data = (await response.json()) as { buildId?: string };
+      if (!data.buildId) return;
+      const previous = sessionStorage.getItem("playgo:build");
+      sessionStorage.setItem("playgo:build", data.buildId);
+      if (previous && previous !== data.buildId) {
+        location.reload();
+      }
+    } catch {
+      /* 服务还没起来时忽略 */
+    }
   }
 
   readonly subscribe = (listener: () => void): (() => void) => {

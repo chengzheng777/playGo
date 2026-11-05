@@ -107,6 +107,10 @@ async function main() {
   );
   check("建房时带上所选游戏", createdState.data.gameId === "yiyu");
 
+  const list1 = await fetch(`${BASE}/api/rooms`).then((r) => r.json());
+  const listed = list1.rooms.find((room) => room.code === code);
+  check("房间出现在大厅列表", listed?.phase === "lobby" && listed.players === 1);
+
   const guest = new Client("玩家B");
   await guest.connect();
   guest.send("room.join", { code, name: "Bob", role: "player" });
@@ -214,6 +218,11 @@ async function main() {
     (m) => m.type === "room.state" && m.data.game?.phase === "turn",
   );
   check("游戏开始", hostStart.data.room.phase === "playing");
+  const list2 = await fetch(`${BASE}/api/rooms`).then((r) => r.json());
+  check(
+    "开局后列表标记游戏中",
+    list2.rooms.find((room) => room.code === code)?.phase === "playing",
+  );
   check(
     "规则按房主配置生效",
     hostStart.data.game.roundSeconds === 45 && hostStart.data.game.targetScore === 5,

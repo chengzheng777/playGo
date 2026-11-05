@@ -7,6 +7,7 @@ import {
   type Player,
   type Role,
   type Room,
+  type RoomSummary,
   type YiyuSettings,
 } from "../shared/protocol";
 import type { YiyuGame } from "./games/yiyu";
@@ -57,6 +58,24 @@ export class RoomManager {
 
   all(): IterableIterator<RoomRecord> {
     return this.rooms.values();
+  }
+
+  /** 大厅房间列表：只暴露公开信息，按创建时间倒序 */
+  list(limit = 30): RoomSummary[] {
+    return [...this.rooms.values()]
+      .map((record) => ({
+        code: record.room.code,
+        hostName:
+          record.room.players.find((player) => player.id === record.room.hostId)?.name ?? "房主",
+        gameId: record.gameId,
+        players: record.room.players.length,
+        online: record.room.players.filter((player) => player.connected).length,
+        capacity: record.room.maxPlayers,
+        phase: record.room.phase,
+        createdAt: record.room.createdAt,
+      }))
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, limit);
   }
 
   get size(): number {

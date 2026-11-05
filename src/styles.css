@@ -1896,3 +1896,69 @@ select {
   font-size: 12px;
   color: var(--game-accent);
 }
+
+/* 大厅房间列表 */
+.rooms-panel {
+  gap: 8px;
+}
+
+.room-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.room-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.room-row:last-child {
+  border-bottom: none;
+}
+
+.room-emoji {
+  width: 26px;
+  font-size: 20px;
+  line-height: 1;
+  text-align: center;
+  flex: none;
+}
+
+.room-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.room-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.room-title b {
+  font-size: 15px;
+  letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
+}
+
+.room-game {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-sub {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

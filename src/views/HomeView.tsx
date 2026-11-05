@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GAME_CATALOG, getGameMeta } from "../../shared/games";
+import type { RoomSummary } from "../../shared/protocol";
 import { store, useAppState } from "../store";
 
 export function HomeView() {
@@ -8,11 +9,33 @@ export function HomeView() {
   const [name, setName] = useState(state.nickname);
   const [code, setCode] = useState("");
   const [gameId, setGameId] = useState("yiyu");
+  const [rooms, setRooms] = useState<RoomSummary[] | null>(null);
 
   const nameReady = name.trim().length > 0;
   const selectedMeta = getGameMeta(gameId);
   const canCreate = nameReady && selectedMeta?.available === true && !state.busy;
   const canAct = nameReady && !state.busy;
+
+  useEffect(() => {
+    let alive = true;
+
+    const load = async () => {
+      try {
+        const response = await fetch("/api/rooms");
+        const data = (await response.json()) as { rooms: RoomSummary[] };
+        if (alive) setRooms(data.rooms);
+      } catch {
+        /* 服务没起来时静默重试 */
+      }
+    };
+
+    void load();
+    const timer = window.setInterval(load, 3000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   return (
     <div className="home home-hall">
@@ -84,9 +107,52 @@ export function HomeView() {
         <p className="hint">房主电脑会当大屏，手机玩家扫码加入后分队。</p>
       </section>
 
+      <section className="panel rooms-panel">
+        <div className="panel-head">
+          <h2>房间列表</h2>
+          <span className="count">{rooms ? `${rooms.length} 个房间` : "读取中"}</span>
+        </div>
+
+        {rooms && rooms.length === 0 && <p className="game-hint">还没有房间，创建一个吧。</p>}
+
+        <ul className="room-list">
+          {rooms?.map((room) => {
+            const meta = room.gameId ? getGameMeta(room.gameId) : undefined;
+            const full = room.players >= room.capacity;
+            const playing = room.phase !== "lobby";
+            return (
+              <li key={room.code} className="room-row">
+                <span className="room-emoji">{meta?.emoji ?? "🎲"}</span>
+                <div className="room-info">
+                  <div className="room-title">
+                    <b>{room.code}</b>
+                    <span className="room-game">{meta?.name ?? "未选游戏"}</span>
+                  </div>
+                  <div className="room-sub">
+                    {room.hostName} 的房间 · {room.players}/{room.capacity} 人
+                    {playing ? " · 游戏中" : ""}
+                  </div>
+                </div>
+                <button
+                  className="btn btn-mini"
+                  disabled={full || playing || !nameReady || state.busy}
+                  onClick={() => store.joinRoom(room.code, name)}
+                >
+                  {playing ? "游戏中" : full ? "已满" : "加入"}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+
+        {!nameReady && rooms && rooms.length > 0 && (
+          <p className="game-hint">先在上面填个名字，才能加入。</p>
+        )}
+      </section>
+
       <section className="panel">
         <label className="label" htmlFor="room-code">
-          加入别人的房间
+          用房间码加入
         </label>
         <div className="row">
           <input

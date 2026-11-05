@@ -246,9 +246,22 @@ interface YiyuEvent {
 ---
 
 ## 8. M0 不实现（预留）
-
 - 二进制帧 / 增量补丁（`state.delta`）
 - 房间列表与发现（本机多房间）
 - 观战与角色切换
 - 游戏层动作校验与回滚
 - 鉴权（局域网内仅靠房间码 + token）
+
+---
+
+## 9. HTTP 接口（与 WebSocket 同源）
+
+| 方法 | 路径 | 返回 | 说明 |
+| --- | --- | --- | --- |
+| GET | `/api/health` | `{ok, app, version, port, rooms, buildId}` | 健康检查；`buildId` 用于识别过期页面 |
+| GET | `/api/networks` | `{port, urls: [{ip, iface, kind}]}` | 生成二维码可用的局域网地址 |
+| GET | `/api/rooms` | `{rooms: RoomSummary[]}` | 大厅房间列表 |
+| GET | `/api/qr?text=` | `image/svg+xml` | 生成二维码，只接受 http(s) 文本 |
+
+`RoomSummary` 只含公开信息：房间码、房主名、游戏、人数、阶段，不含玩家 token。
+`/api/rooms` 由客户端每 3 秒轮询一次，用来刷新大厅列表。

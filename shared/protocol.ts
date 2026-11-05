@@ -43,6 +43,18 @@ export interface Room {
   maxPlayers: number;
 }
 
+/** 大厅房间列表里的一条，不含玩家隐私字段 */
+export interface RoomSummary {
+  code: string;
+  hostName: string;
+  gameId: string | null;
+  players: number;
+  online: number;
+  capacity: number;
+  phase: Phase;
+  createdAt: number;
+}
+
 export interface ChatMessage {
   id: string;
   from: string;
