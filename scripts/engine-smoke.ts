@@ -213,7 +213,7 @@ console.log("\n拍颜色");
   const revealed = game.viewFor(HOST_ID);
   check("全部提交后揭晓", revealed.phase === "reveal");
   check("最接近的排第一", revealed.results[0]?.playerId === first!.id);
-  check("第一名拿 10 分", revealed.results[0]?.points === 10);
+  check("第一名拿 100 分", revealed.results[0]?.points === 100);
   check("大屏能看到照片", typeof revealed.results[0]?.photo === "string");
   check(
     "玩家看不到别人照片",

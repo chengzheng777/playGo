@@ -19,7 +19,7 @@ const PALETTE: ColorTarget[] = [
   { name: "奶油白", hex: "#F5F0E1" },
 ];
 
-const RANK_POINTS = [10, 8, 6, 5, 4, 3, 2, 1];
+const RANK_POINTS = [100, 80, 60, 50, 40, 30, 20, 10];
 
 export interface ColorOptions {
   hostId: string;
