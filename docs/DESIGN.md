@@ -230,7 +230,7 @@ PC 浏览器              本机 Node 服务                 手机浏览器
 | 渲染 | PixiJS / Phaser / 纯 Canvas | 按游戏类型定 | — |
 | 二维码 | `qrcode`（服务端出 SVG） | 不依赖前端库，PC 端直接显示 | 前端 `qrcode` |
 | 测试 | Vitest + 手测清单 | — | — |
-| 打包 | Node SEA / `pkg` 单 exe；后期 Electron/Tauri 套壳 | 双击即用，自动开浏览器、托盘常驻 | — |
+| 打包 | Bun `--compile` 单 exe；后期 Electron/Tauri 套壳 | 双击即用，自动开浏览器、托盘常驻 | 详见 [PACKAGING.md](./PACKAGING.md) |
 
 ---
 
