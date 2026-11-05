@@ -16,9 +16,17 @@ export const ROOM_CODE_LEN = 4;
 export type Role = "screen" | "player" | "spectator";
 export type Phase = "lobby" | "playing" | "ended";
 
+export interface Avatar {
+  /** 1–2 个字符，或一个 emoji */
+  text: string;
+  /** #rrggbb */
+  color: string;
+}
+
 export interface Player {
   id: string;
   name: string;
+  avatar: Avatar;
   role: Role;
   seat: number;
   ready: boolean;
@@ -61,6 +69,7 @@ export type YiyuResult = "correct" | "skip" | "timeout";
 export interface YiyuMember {
   id: string;
   name: string;
+  avatar: Avatar;
   connected: boolean;
 }
 
@@ -141,6 +150,7 @@ export type ClientMessage =
     })
   | (Envelope & { type: "room.leave"; data: Record<string, never> })
   | (Envelope & { type: "player.ready"; data: { ready: boolean } })
+  | (Envelope & { type: "player.avatar"; data: { avatar: Avatar } })
   | (Envelope & { type: "chat.send"; data: { text: string } })
   | (Envelope & { type: "game.select"; data: { gameId: string } })
   | (Envelope & { type: "game.start"; data: Record<string, never> })

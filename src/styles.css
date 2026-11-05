@@ -1473,3 +1473,279 @@ select {
     transform: rotate(360deg);
   }
 }
+
+/* ============================================================
+   头像 / 头像选择
+   ============================================================ */
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
+}
+
+.avatar-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.avatar-btn:hover {
+  filter: brightness(1.08);
+}
+
+.member .avatar {
+  margin-right: 4px;
+  vertical-align: -4px;
+}
+
+.member {
+  display: inline-flex;
+  align-items: center;
+}
+
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: end center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(4px);
+}
+
+@media (min-width: 640px) {
+  .modal-mask {
+    place-items: center;
+  }
+}
+
+.modal {
+  width: min(430px, 100%);
+  max-height: 88dvh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: #101821;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+  animation: word-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal-head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.avatar-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.avatar-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.emoji {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.emoji:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.emoji.on {
+  border-color: var(--accent);
+  background: rgba(62, 224, 143, 0.14);
+  transform: scale(1.04);
+}
+
+.color-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.color-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.color-dot.on {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* ============================================================
+   大屏 / 手机 两种游戏视图
+   ============================================================ */
+
+.screen-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.18);
+  color: #c4b5fd;
+  font-size: 11px;
+}
+
+.screen-mode .arena,
+.screen-mode .scoreboard {
+  max-width: 840px;
+}
+
+.screen-mode .word-card {
+  min-height: 300px;
+}
+
+.screen-mode .word {
+  font-size: clamp(54px, 9vw, 108px);
+}
+
+.screen-mode .screen-foot {
+  font-size: 13px;
+}
+
+.phone-mode .arena {
+  max-width: 520px;
+  gap: 14px;
+}
+
+.phone-mode .scoreboard {
+  padding: 12px 12px 0;
+}
+
+.phone-mode .team-score {
+  font-size: 26px;
+}
+
+.phone-mode .timer {
+  width: 104px;
+  height: 104px;
+}
+
+.phone-mode .timer svg {
+  width: 104px;
+  height: 104px;
+}
+
+.phone-mode .timer-num {
+  font-size: 28px;
+}
+
+.phone-mode .word-card {
+  min-height: 150px;
+  padding: 20px 16px;
+}
+
+.phone-mode .word {
+  font-size: clamp(30px, 9vw, 42px);
+}
+
+.phone-mode .result-banner {
+  font-size: 26px;
+}
+
+.phone-card {
+  width: 100%;
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 20px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.03);
+  text-align: center;
+  animation: word-in 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.phone-card.is-describer {
+  border-color: color-mix(in srgb, var(--team-color) 45%, var(--line));
+  background:
+    radial-gradient(80% 120% at 50% 0%, var(--team-tint), transparent 70%),
+    rgba(255, 255, 255, 0.03);
+}
+
+.phone-emoji {
+  font-size: 46px;
+  line-height: 1;
+}
+
+.phone-card h2 {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.phone-sub {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.phone-hint {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 92%;
+}
+
+.screen-foot {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}

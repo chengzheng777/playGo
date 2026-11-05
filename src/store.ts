@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type {
+  Avatar,
   ChatMessage,
   ClientMessage,
   ErrorCode,
@@ -146,6 +147,10 @@ class Store {
     const you = this.state.you;
     if (!you) return;
     this.send({ v: 1, type: "player.ready", data: { ready: !you.ready } });
+  }
+
+  updateAvatar(avatar: Avatar): void {
+    this.send({ v: 1, type: "player.avatar", data: { avatar } });
   }
 
   sendChat(text: string): void {

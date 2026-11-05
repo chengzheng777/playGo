@@ -6,6 +6,7 @@ import {
   MAX_NAME_LEN,
   PROTOCOL_VERSION,
   isRoomCode,
+  type Avatar,
   type ChatMessage,
   type ClientMessage,
   type ErrorCode,
@@ -44,6 +45,12 @@ const joinSchema = z.object({
   token: z.string().length(32).optional(),
 });
 const readySchema = z.object({ ready: z.boolean() });
+const avatarSchema = z.object({
+  avatar: z.object({
+    text: z.string().trim().min(1).max(8),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  }),
+});
 const chatSchema = z.object({ text: z.string().trim().min(1).max(MAX_CHAT_LEN) });
 const pingSchema = z.object({ t: z.number() });
 const selectGameSchema = z.object({ gameId: z.string().trim().min(1).max(32) });
@@ -87,6 +94,11 @@ function parseClientMessage(raw: string): Parsed {
       const parsed = readySchema.safeParse(msg.data);
       if (!parsed.success) return { kind: "invalid" };
       return { kind: "ok", msg: { ...base, type: "player.ready", data: parsed.data } };
+    }
+    case "player.avatar": {
+      const parsed = avatarSchema.safeParse(msg.data);
+      if (!parsed.success) return { kind: "invalid" };
+      return { kind: "ok", msg: { ...base, type: "player.avatar", data: parsed.data } };
     }
     case "chat.send": {
       const parsed = chatSchema.safeParse(msg.data);
@@ -225,6 +237,8 @@ export class Hub {
         return this.leaveRoom(conn);
       case "player.ready":
         return this.setReady(conn, parsed.msg.data.ready);
+      case "player.avatar":
+        return this.setAvatar(conn, parsed.msg.data.avatar);
       case "chat.send":
         return this.chat(conn, parsed.msg.data.text);
       case "game.select":
@@ -316,6 +330,19 @@ export class Hub {
     this.broadcast(roomCode);
   }
 
+  private setAvatar(conn: Conn, avatar: Avatar): void {
+    const { roomCode, playerId } = conn;
+    if (!roomCode || !playerId) return;
+    const text = [...avatar.text.trim()].slice(0, 2).join("");
+    if (!text) return;
+    const changed = this.rooms.setAvatar(roomCode, playerId, {
+      text,
+      color: avatar.color.toLowerCase(),
+    });
+    if (!changed) return;
+    this.broadcast(roomCode);
+  }
+
   private chat(conn: Conn, text: string): void {
     const { roomCode, playerId } = conn;
     if (!roomCode || !playerId) return;
@@ -379,14 +406,16 @@ export class Hub {
       return;
     }
 
-    const connected = record.room.players.filter((player) => player.connected);
+    // 房主是大屏 / 主持人，不参赛；队伍只由手机玩家组成
+    const participants = record.room.players.filter(
+      (player) => player.id !== record.room.hostId,
+    );
+    const connected = participants.filter((player) => player.connected);
     if (connected.length < 2) {
-      this.replyError(conn, "BAD_PHASE", "至少需要 2 名玩家");
+      this.replyError(conn, "BAD_PHASE", "至少需要 2 名玩家（房主是大屏，不参赛）");
       return;
     }
-    const notReady = connected.filter(
-      (player) => player.id !== record.room.hostId && !player.ready,
-    );
+    const notReady = connected.filter((player) => !player.ready);
     if (notReady.length > 0) {
       this.replyError(conn, "BAD_PHASE", `还有 ${notReady.length} 人没准备`);
       return;
@@ -394,7 +423,7 @@ export class Hub {
 
     record.game = new YiyuGame(
       record.room.players,
-      { targetScore: 8, roundSeconds: 60 },
+      { targetScore: 8, roundSeconds: 60, hostId: record.room.hostId },
       Date.now(),
     );
     record.room.phase = "playing";

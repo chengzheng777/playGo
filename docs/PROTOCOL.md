@@ -39,16 +39,13 @@
 | `room.state` | S→C | `{room, you, version, token, gameId, game, serverTime}` | 全量状态，任何变更后广播 |
 | `room.left` | S→C | `{playerId, reason}` | 玩家离开 |
 | `player.ready` | C→S | `{ready}` | 准备/取消 |
+| `player.avatar` | C→S | `{avatar: {text, color}}` | 换头像，随后广播 |
 | `chat.send` | C→S | `{text}` | 文本 ≤ 200 字 |
 | `chat.message` | S→C | `{from, name, text, ts}` | |
 | `game.select` | C→S | `{gameId}` | 仅房主，仅大厅阶段 |
-| `game.start` | C→S | `{}` | 仅房主；所有非房主玩家需已准备，至少 2 人 |
-| `game.action` | C→S | `{action}` | 见第 8 节 |
+| `game.start` | C→S | `{}` | 仅房主；至少 2 名已准备的手机玩家 |
+| `game.action` | C→S | `{action}` | 见第 7 节 |
 | `game.back` | C→S | `{}` | 仅房主；结束本局回大厅 |
-| `game.start` | C→S | `{}` | 仅房主 |
-| `game.state` | S→C | `{view, seq}` | 游戏层数据，按角色裁剪 |
-| `game.action` | C→S | `{action, seq}` | 玩家操作 |
-| `state.resync` | C→S | `{since}` | 版本跳跃时请求全量 |
 | `ping` / `pong` | C→S / S→C | `{t}` / `{t, serverTime}` | 心跳，5 秒一次 |
 | `ack` | S→C | `{id}` | 确认收到某条客户端消息 |
 | `error` | S→C | `{code, message, fatal}` | `fatal=true` 表示随后断开 |
@@ -64,12 +61,18 @@ type Phase = "lobby" | "playing" | "ended";
 interface Player {
   id: string;          // 服务端分配，稳定
   name: string;        // 1–16 字
+  avatar: Avatar;      // { text, color }，默认取名字首字
   role: Role;
   seat: number;        // 0 起，加入顺序
   ready: boolean;
   connected: boolean;
   joinedAt: number;
   latencyMs?: number;  // 由心跳估算
+}
+
+interface Avatar {
+  text: string;        // 1–2 个字符或一个 emoji
+  color: string;       // #rrggbb
 }
 
 interface Room {
@@ -194,7 +197,7 @@ interface YiyuTurn {
   describerName: string;
   mode: "talk" | "act" | "lip" | "rush";
   deadline: number;         // 服务端 epoch ms
-  word?: string;            // 只有描述者本人，或 turn 结束后才有
+  word?: string;            // 只发给大屏（房主），或 turn 结束后才有
   guesses: YiyuGuess[];     // 仅抢答模式
   result?: "correct" | "skip" | "timeout";
   winnerName?: string;
@@ -207,7 +210,8 @@ interface YiyuEvent {
 }
 ```
 
-裁剪规则：`word` 只发给描述者；只要进入 `reveal` / `ended`，所有人可见。
+裁剪规则：`word` 只发给大屏（房主）；只要进入 `reveal` / `ended`，所有人可见。
+房主不参赛，`teams` 里只包含手机玩家。
 倒计时不靠推送，客户端用 `room.state.serverTime` 校准本地时钟后自行渲染。
 
 ### 7.2 动作
@@ -218,8 +222,9 @@ interface YiyuEvent {
 { "v": 1, "type": "game.action", "data": { "action": { "type": "guess", "text": "泡面" } } }
 ```
 
-- `correct` / `skip`：只有当前回合的描述者能发；其他玩家发送会被静默忽略。
-- `guess`：只在 `mode === "rush"` 且非描述者时有效；答案归一化后全等才算对，首答命中者所在队伍 +1。
+- `correct` / `skip`：当前回合的描述者**或大屏（房主）**能发；其他玩家发送会被静默忽略。
+  大屏可以代为计分，这样描述者不必一边比划一边看手机。
+- `guess`：只在 `mode === "rush"` 且是参赛的手机玩家、且不是描述者时有效；答案归一化后全等才算对，首答命中者所在队伍 +1。大屏不能抢答。
 
 ### 7.3 回合推进
 

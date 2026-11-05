@@ -1,4 +1,5 @@
 import type { Player } from "../../shared/protocol";
+import { AvatarBadge } from "./Avatar";
 
 export function PlayerList({
   players,
@@ -19,14 +20,14 @@ export function PlayerList({
       <ul className="players">
         {players.map((player) => (
           <li key={player.id} className={`player${player.connected ? "" : " offline"}`}>
-            <span className="seat">{player.seat + 1}</span>
+            <AvatarBadge avatar={player.avatar} size={32} />
             <span className="pname">
               {player.name}
               {player.id === youId && <span className="me">你</span>}
             </span>
             <span className="tags">
-              {player.id === hostId && <span className="tag tag-host">房主</span>}
-              {player.ready && player.role !== "screen" && (
+              {player.id === hostId && <span className="tag tag-host">大屏</span>}
+              {player.ready && player.id !== hostId && (
                 <span className="tag tag-ready">已准备</span>
               )}
               {!player.connected && <span className="tag tag-off">掉线</span>}

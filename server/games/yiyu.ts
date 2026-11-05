@@ -16,6 +16,7 @@ const TEAM_NAME: Record<YiyuTeamId, string> = { A: "青队", B: "橙队" };
 interface Member {
   id: string;
   name: string;
+  avatar: { text: string; color: string };
   team: YiyuTeamId;
   connected: boolean;
 }
@@ -41,6 +42,8 @@ interface TurnState {
 export interface YiyuOptions {
   targetScore: number;
   roundSeconds: number;
+  /** 大屏玩家，不参赛，但能看到词、也能代为计分 */
+  hostId: string;
 }
 
 function normalize(text: string): string {
@@ -66,6 +69,7 @@ export class YiyuGame {
 
   private readonly targetScore: number;
   private readonly roundMs: number;
+  private readonly hostId: string;
   private readonly teams: Record<YiyuTeamId, Team> = {
     A: { score: 0, cursor: 0, members: [] },
     B: { score: 0, cursor: 0, members: [] },
@@ -81,14 +85,18 @@ export class YiyuGame {
   constructor(players: Player[], options: YiyuOptions, now: number) {
     this.targetScore = options.targetScore;
     this.roundMs = options.roundSeconds * 1000;
+    this.hostId = options.hostId;
 
+    // 房主是大屏 / 主持人，不参加分队
     [...players]
+      .filter((player) => player.id !== options.hostId)
       .sort((a, b) => a.seat - b.seat)
       .forEach((player, index) => {
         const team: YiyuTeamId = index % 2 === 0 ? "A" : "B";
         this.teams[team].members.push({
           id: player.id,
           name: player.name,
+          avatar: { ...player.avatar },
           team,
           connected: player.connected,
         });
@@ -107,7 +115,8 @@ export class YiyuGame {
     if (this.phase !== "turn" || !turn) return false;
 
     if (action.type === "correct" || action.type === "skip") {
-      if (playerId !== turn.describerId) return false;
+      // 大屏（房主）和当前描述者都能计分
+      if (playerId !== turn.describerId && playerId !== this.hostId) return false;
       this.resolve(action.type, now);
       return true;
     }
@@ -146,7 +155,7 @@ export class YiyuGame {
 
   viewFor(playerId: string): YiyuView {
     const turn = this.turn;
-    const isDescriber = turn?.describerId === playerId;
+    const isScreen = playerId === this.hostId;
     const reveal = this.phase !== "turn";
 
     return {
@@ -162,6 +171,7 @@ export class YiyuGame {
         members: this.teams[id].members.map((member) => ({
           id: member.id,
           name: member.name,
+          avatar: { ...member.avatar },
           connected: member.connected,
         })),
       })),
@@ -172,7 +182,7 @@ export class YiyuGame {
             describerName: turn.describerName,
             mode: turn.mode,
             deadline: turn.deadline,
-            word: isDescriber || reveal ? turn.word : undefined,
+            word: isScreen || reveal ? turn.word : undefined,
             guesses: turn.guesses.map((guess) => ({ ...guess })),
             result: turn.result,
             winnerName: turn.winnerName,

@@ -160,38 +160,89 @@ async function main() {
   const notHost = await guest2.next((m) => m.type === "error" && m.data.code === "NOT_HOST");
   check("非房主不能选游戏", notHost.data.code === "NOT_HOST");
 
+  // 只有 1 名手机玩家（房主不参赛）时不能开始
+  host.send("game.start", {});
+  const tooFew = await host.next((m) => m.type === "error" && m.data.code === "BAD_PHASE");
+  check("只有 1 名手机玩家时不能开始", tooFew.data.message.includes("2 名"));
+
+  const carol = new Client("玩家C");
+  await carol.connect();
+  carol.send("room.join", { code, name: "Carol", role: "player" });
+  await carol.next((m) => m.type === "room.state" && m.data.you.name === "Carol");
+  check("第三名玩家加入", true);
+
+  carol.send("player.avatar", { avatar: { text: "🦊", color: "#38bdf8" } });
+  const avatarState = await host.next(
+    (m) =>
+      m.type === "room.state" &&
+      m.data.room.players.some((p) => p.name === "Carol" && p.avatar.text === "🦊"),
+  );
+  check("头像更新并广播", avatarState.data.room.players.find((p) => p.name === "Carol").avatar.color === "#38bdf8");
+
+  carol.send("player.ready", { ready: true });
+  await host.next(
+    (m) =>
+      m.type === "room.state" &&
+      m.data.room.players.some((p) => p.name === "Carol" && p.ready),
+  );
+
   host.send("game.start", {});
   const hostStart = await host.next(
     (m) => m.type === "room.state" && m.data.game?.phase === "turn",
   );
-  const guestStart = await guest2.next(
+  const bobStart = await guest2.next(
+    (m) => m.type === "room.state" && m.data.game?.phase === "turn",
+  );
+  const carolStart = await carol.next(
     (m) => m.type === "room.state" && m.data.game?.phase === "turn",
   );
   check("游戏开始", hostStart.data.room.phase === "playing");
-  check("分成两队", hostStart.data.game.teams.filter((t) => t.members.length > 0).length === 2);
+  check(
+    "房主是大屏、不参赛",
+    hostStart.data.game.teams.every((team) =>
+      team.members.every((member) => member.id !== hostStart.data.you.id),
+    ),
+  );
+  check("手机玩家分成两队", hostStart.data.game.teams.every((team) => team.members.length === 1));
+  check("大屏能看到词", typeof hostStart.data.game.turn.word === "string");
+  check("手机玩家看不到词", !bobStart.data.game.turn.word && !carolStart.data.game.turn.word);
 
-  const playersInGame = [
-    { client: host, state: hostStart },
-    { client: guest2, state: guestStart },
+  const playerStates = [
+    { client: guest2, state: bobStart },
+    { client: carol, state: carolStart },
   ];
-  const describer = playersInGame.find((entry) => entry.state.data.game.turn.word);
-  const watchers = playersInGame.filter((entry) => !entry.state.data.game.turn.word);
-  check("只有描述者能看到词", describer !== undefined && watchers.length === 1);
+  const describerId = hostStart.data.game.turn.describerId;
+  const descEntry = playerStates.find((entry) => entry.state.data.you.id === describerId);
+  const otherEntry = playerStates.find((entry) => entry !== descEntry);
+  check("能找到描述者", descEntry !== undefined);
 
-  if (describer) {
-    describer.client.send("game.action", { action: { type: "correct" } });
-    const reveal = await host.next(
-      (m) => m.type === "room.state" && m.data.game?.turn?.result === "correct",
-    );
-    check("答对后进入揭晓", reveal.data.game.phase === "reveal");
-    check("得分加一", reveal.data.game.teams.some((team) => team.score === 1));
+  otherEntry?.client.send("game.action", { action: { type: "correct" } });
+  host.send("game.action", { action: { type: "correct" } });
 
-    const nextRound = await host.next(
-      (m) => m.type === "room.state" && m.data.game?.phase === "turn" && m.data.game.round === 2,
-      6000,
-    );
-    check("揭晓后自动进入下一回合", nextRound.data.game.round === 2);
-  }
+  const reveal = await host.next(
+    (m) => m.type === "room.state" && m.data.game?.turn?.result === "correct",
+  );
+  check("大屏可以代为计分", reveal.data.game.teams.some((team) => team.score === 1));
+  check("非描述者玩家计分被忽略", reveal.data.game.teams.reduce((sum, team) => sum + team.score, 0) === 1);
+
+  const nextRound = await host.next(
+    (m) => m.type === "room.state" && m.data.game?.phase === "turn" && m.data.game.round === 2,
+    6000,
+  );
+  check("揭晓后自动进入下一回合", nextRound.data.game.round === 2);
+
+  const round2Describer = nextRound.data.game.turn.describerId;
+  const round2Client = playerStates.find(
+    (entry) => entry.state.data.you.id === round2Describer,
+  )?.client;
+  round2Client?.send("game.action", { action: { type: "correct" } });
+  const reveal2 = await host.next(
+    (m) =>
+      m.type === "room.state" &&
+      m.data.game?.turn?.result === "correct" &&
+      m.data.game.round === 2,
+  );
+  check("描述者自己也能计分", reveal2.data.game.teams.reduce((sum, team) => sum + team.score, 0) === 2);
 
   host.send("game.back", {});
   const backToLobby = await host.next(
@@ -201,6 +252,7 @@ async function main() {
 
   host.close();
   guest2.close();
+  carol.close();
   stranger.close();
 
   console.log(`\n通过 ${passed} 项，失败 ${failures.length} 项`);

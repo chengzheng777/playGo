@@ -1,5 +1,8 @@
 import type { CSSProperties } from "react";
+import { useState } from "react";
 import { GAME_CATALOG } from "../../shared/games";
+import { AvatarBadge } from "../components/Avatar";
+import { AvatarPicker } from "../components/AvatarPicker";
 import { ChatPanel } from "../components/ChatPanel";
 import { PlayerList } from "../components/PlayerList";
 import { QrCard } from "../components/QrCard";
@@ -16,6 +19,7 @@ const CONN_LABEL: Record<string, string> = {
 export function LobbyView() {
   const state = useAppState();
   const { room, you } = state;
+  const [avatarOpen, setAvatarOpen] = useState(false);
 
   if (!room || !you) {
     return (
@@ -28,15 +32,17 @@ export function LobbyView() {
 
   const isHost = room.hostId === you.id;
   const players = [...room.players].sort((a, b) => a.seat - b.seat);
-  const connected = players.filter((player) => player.connected);
-  const needReady = connected.filter(
-    (player) => player.id !== room.hostId && !player.ready,
-  ).length;
+  // 房主是大屏 / 主持人，不参加分队
+  const participants = players.filter((player) => player.id !== room.hostId);
+  const onlineParticipants = participants.filter((player) => player.connected);
+  const readyCount = onlineParticipants.filter((player) => player.ready).length;
+  const needReady = onlineParticipants.length - readyCount;
   const selected = state.gameId;
-  const canStart = Boolean(selected) && connected.length >= 2 && needReady === 0;
+  const canStart = Boolean(selected) && onlineParticipants.length >= 2 && needReady === 0;
+
   const startLabel = !selected
     ? "先选一个游戏"
-    : connected.length < 2
+    : onlineParticipants.length < 2
       ? "至少需要 2 名玩家"
       : needReady > 0
         ? `还差 ${needReady} 人准备`
@@ -49,6 +55,13 @@ export function LobbyView() {
           <span>房间</span>
           <b>{room.code}</b>
         </div>
+        <button
+          className="avatar-btn"
+          onClick={() => setAvatarOpen(true)}
+          aria-label="换个头像"
+        >
+          <AvatarBadge avatar={you.avatar} size={30} />
+        </button>
         <div className={`status status-${state.conn}`}>
           <i />
           {CONN_LABEL[state.conn] ?? state.conn}
@@ -105,7 +118,8 @@ export function LobbyView() {
 
             {selected === "yiyu" && (
               <p className="game-rule">
-                按座位自动分成青队 / 橙队。描述者看词，队友在现实里喊答案；60 秒一回合，先到 8 分获胜。抢答回合全场都能输入答案。
+                房主电脑是大屏，负责播放词语；手机玩家分成青队 / 橙队，背对屏幕猜词。60
+                秒一回合，先到 8 分获胜。抢答回合全场都能用手机输入答案。
               </p>
             )}
           </section>
@@ -129,11 +143,9 @@ export function LobbyView() {
               {startLabel}
             </button>
             <span className="ready-summary">
-              {connected.length < 2
-                ? "让朋友扫码加入，2 人以上才能开始"
-                : needReady > 0
-                  ? "等大家点准备"
-                  : "都准备好了"}
+              {onlineParticipants.length < 2
+                ? "房主不参赛，至少 2 名手机玩家才能开始"
+                : `已准备 ${readyCount}/${onlineParticipants.length} · 房主负责大屏`}
             </span>
           </div>
         ) : (
@@ -145,11 +157,23 @@ export function LobbyView() {
               {you.ready ? "取消准备" : "准备"}
             </button>
             <span className="ready-summary">
-              {selected === "yiyu" ? "房主选了「一愚惊人」" : "等房主选游戏"}
+              {selected === "yiyu" ? "房主电脑会播放词语，背对屏幕猜" : "等房主选游戏"}
             </span>
           </div>
         )}
       </footer>
+
+      {avatarOpen && (
+        <AvatarPicker
+          name={you.name}
+          current={you.avatar}
+          onClose={() => setAvatarOpen(false)}
+          onSave={(avatar) => {
+            store.updateAvatar(avatar);
+            setAvatarOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

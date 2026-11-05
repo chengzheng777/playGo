@@ -8,6 +8,7 @@ import {
   type Room,
 } from "../shared/protocol";
 import type { YiyuGame } from "./games/yiyu";
+import { defaultAvatar } from "../shared/avatars";
 
 export interface RoomRecord {
   room: Room;
@@ -63,6 +64,7 @@ export class RoomManager {
     const player: Player = {
       id: shortId("p"),
       name: name.trim().slice(0, 16),
+      avatar: defaultAvatar(name),
       role,
       seat: 0,
       ready: false,
@@ -105,6 +107,7 @@ export class RoomManager {
     const player: Player = {
       id: shortId("p"),
       name: trimmed,
+      avatar: defaultAvatar(trimmed),
       role,
       seat: firstFreeSeat(record.room.players),
       ready: false,
@@ -166,6 +169,16 @@ export class RoomManager {
     if (!record || !player) return undefined;
     if (player.ready === ready) return player;
     player.ready = ready;
+    record.version += 1;
+    record.lastActiveAt = Date.now();
+    return player;
+  }
+
+  setAvatar(code: string, playerId: string, avatar: { text: string; color: string }): Player | undefined {
+    const record = this.rooms.get(code);
+    const player = record?.room.players.find((p) => p.id === playerId);
+    if (!record || !player) return undefined;
+    player.avatar = avatar;
     record.version += 1;
     record.lastActiveAt = Date.now();
     return player;

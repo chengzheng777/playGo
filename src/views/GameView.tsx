@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { Player, Room, YiyuMode, YiyuTeam, YiyuView } from "../../shared/protocol";
+import { AvatarBadge } from "../components/Avatar";
 import { Confetti } from "../components/Confetti";
 import { TimerRing } from "../components/TimerRing";
 import { haptics } from "../lib/haptics";
@@ -33,7 +34,7 @@ const MODE_INFO: Record<
     label: "抢答",
     icon: "⚡",
     hint: "你来描述，全场都能抢答",
-    watch: "全场抢答，输入答案先到先得",
+    watch: "全场抢答，用手机输入答案",
   },
 };
 
@@ -83,7 +84,9 @@ function GameRoom({ room, you, game, conn, serverOffset }: GameRoomProps) {
   const turn = game.turn;
   const phase = game.phase;
   const isHost = room.hostId === you.id;
+  const isScreen = isHost;
   const isDescriber = !!turn && turn.describerId === you.id;
+  const canScore = isScreen || isDescriber;
   const remaining = turn ? Math.max(0, turn.deadline - now) : 0;
   const total = game.roundSeconds * 1000;
   const critical = phase === "turn" && remaining <= 10_000;
@@ -200,13 +203,17 @@ function GameRoom({ room, you, game, conn, serverOffset }: GameRoomProps) {
   const activeTeam = game.teams.find((team) => team.id === turn?.teamId);
 
   return (
-    <div className="game" data-team={turn?.teamId ?? "A"}>
+    <div
+      className={`game${isScreen ? " screen-mode" : " phone-mode"}`}
+      data-team={turn?.teamId ?? "A"}
+    >
       <Confetti burst={burst} rain={rain} />
       {flashKey > 0 && <div key={flashKey} className="flash" />}
       {critical && <div className="vignette on" />}
 
       <header className="game-bar">
         <span className="room-pill">房间 {room.code}</span>
+        {isScreen && <span className="screen-pill">大屏</span>}
         <span className={`status status-${conn}`}>
           <i />
           {CONN_LABEL[conn] ?? conn}
@@ -241,74 +248,30 @@ function GameRoom({ room, you, game, conn, serverOffset }: GameRoomProps) {
 
       <main className="arena-wrap">
         {phase === "turn" && turn ? (
-          <section className={`arena${isDescriber ? " is-describer" : ""}`}>
-            <div className="turn-head">
-              <span className="mode-chip" data-mode={turn.mode}>
-                <b>{MODE_INFO[turn.mode].icon}</b>
-                {MODE_INFO[turn.mode].label}
-              </span>
-              <span className="turn-team">{activeTeam?.name}回合</span>
-            </div>
-
-            {isDescriber ? (
-              <div className="word-card" key={turn.deadline}>
-                <span className="word-label">你来描述</span>
-                <span className="word">{turn.word}</span>
-                <span className="word-hint">{MODE_INFO[turn.mode].hint}</span>
-              </div>
-            ) : (
-              <div className="watch-card">
-                <span className="watch-name">{turn.describerName}</span>
-                <span className="watch-mode">正在用「{MODE_INFO[turn.mode].label}」描述</span>
-                <span className="watch-sub">{MODE_INFO[turn.mode].watch}</span>
-              </div>
-            )}
-
-            <TimerRing remaining={remaining} total={total} critical={critical} />
-
-            {isDescriber && (
-              <div className="turn-actions">
-                <button
-                  className="btn btn-primary btn-big"
-                  onClick={() => store.gameAction({ type: "correct" })}
-                >
-                  猜对了 +1
-                </button>
-                <button className="btn btn-ghost" onClick={() => store.gameAction({ type: "skip" })}>
-                  跳过
-                </button>
-              </div>
-            )}
-
-            {!isDescriber && turn.mode === "rush" && (
-              <form className="guess-form" onSubmit={submitGuess}>
-                <input
-                  className="input"
-                  value={guess}
-                  maxLength={24}
-                  placeholder="输入答案，先到先得"
-                  onChange={(event) => setGuess(event.target.value)}
-                />
-                <button className="btn btn-primary" type="submit" disabled={!guess.trim()}>
-                  抢答
-                </button>
-              </form>
-            )}
-
-            {turn.guesses.length > 0 && (
-              <ul className="guess-feed">
-                {turn.guesses
-                  .slice()
-                  .reverse()
-                  .map((item, index) => (
-                    <li key={`${item.playerId}-${index}`} className={item.ok ? "ok" : ""}>
-                      <b>{item.name}</b>
-                      {item.text}
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </section>
+          isScreen ? (
+            <ScreenTurn
+              game={game}
+              turn={turn}
+              teamName={activeTeam?.name ?? ""}
+              remaining={remaining}
+              total={total}
+              critical={critical}
+            />
+          ) : (
+            <PhoneTurn
+              game={game}
+              turn={turn}
+              teamName={activeTeam?.name ?? ""}
+              remaining={remaining}
+              total={total}
+              critical={critical}
+              isDescriber={isDescriber}
+              canScore={canScore}
+              guess={guess}
+              setGuess={setGuess}
+              submitGuess={submitGuess}
+            />
+          )
         ) : (
           <section className={`arena reveal result-${turn?.result ?? "timeout"}`}>
             <div className="result-banner">
@@ -324,6 +287,156 @@ function GameRoom({ room, you, game, conn, serverOffset }: GameRoomProps) {
         )}
       </main>
     </div>
+  );
+}
+
+function ScreenTurn({
+  game,
+  turn,
+  teamName,
+  remaining,
+  total,
+  critical,
+}: {
+  game: YiyuView;
+  turn: NonNullable<YiyuView["turn"]>;
+  teamName: string;
+  remaining: number;
+  total: number;
+  critical: boolean;
+}) {
+  return (
+    <section className="arena screen-arena">
+      <div className="turn-head">
+        <span className="mode-chip" data-mode={turn.mode}>
+          <b>{MODE_INFO[turn.mode].icon}</b>
+          {MODE_INFO[turn.mode].label}
+        </span>
+        <span className="turn-team">
+          {teamName}回合 · {turn.describerName} 描述
+        </span>
+      </div>
+
+      <div className="word-card" key={turn.deadline}>
+        <span className="word-label">请描述这个词</span>
+        <span className="word">{turn.word}</span>
+        <span className="word-hint">{MODE_INFO[turn.mode].hint}</span>
+      </div>
+
+      <TimerRing remaining={remaining} total={total} critical={critical} />
+
+      <div className="turn-actions">
+        <button
+          className="btn btn-primary btn-big"
+          onClick={() => store.gameAction({ type: "correct" })}
+        >
+          猜对了 +1
+        </button>
+        <button className="btn btn-ghost" onClick={() => store.gameAction({ type: "skip" })}>
+          跳过
+        </button>
+      </div>
+
+      {game.round > 0 && <p className="screen-foot">第 {game.round} 轮 · 先到 {game.targetScore} 分</p>}
+    </section>
+  );
+}
+
+function PhoneTurn({
+  game,
+  turn,
+  teamName,
+  remaining,
+  total,
+  critical,
+  isDescriber,
+  canScore,
+  guess,
+  setGuess,
+  submitGuess,
+}: {
+  game: YiyuView;
+  turn: NonNullable<YiyuView["turn"]>;
+  teamName: string;
+  remaining: number;
+  total: number;
+  critical: boolean;
+  isDescriber: boolean;
+  canScore: boolean;
+  guess: string;
+  setGuess: (value: string) => void;
+  submitGuess: (event: FormEvent) => void;
+}) {
+  const info = MODE_INFO[turn.mode];
+
+  return (
+    <section className="arena phone-arena">
+      <div className="turn-head">
+        <span className="mode-chip" data-mode={turn.mode}>
+          <b>{info.icon}</b>
+          {info.label}
+        </span>
+        <span className="turn-team">{teamName}回合</span>
+      </div>
+
+      <div className={`phone-card${isDescriber ? " is-describer" : ""}`}>
+        <span className="phone-emoji">{isDescriber ? "👀" : "🙈"}</span>
+        <h2>{isDescriber ? "看电脑屏幕" : "把背转向电脑"}</h2>
+        <p className="phone-sub">
+          {isDescriber ? "你是描述者" : "别偷看，用耳朵和脑子"}
+        </p>
+        <p className="phone-hint">
+          {isDescriber ? info.hint : `${turn.describerName} 正在用「${info.label}」描述`}
+        </p>
+      </div>
+
+      <TimerRing remaining={remaining} total={total} critical={critical} />
+
+      {canScore && (
+        <div className="turn-actions">
+          <button
+            className="btn btn-primary btn-big"
+            onClick={() => store.gameAction({ type: "correct" })}
+          >
+            猜对了 +1
+          </button>
+          <button className="btn btn-ghost" onClick={() => store.gameAction({ type: "skip" })}>
+            跳过
+          </button>
+        </div>
+      )}
+
+      {!isDescriber && turn.mode === "rush" && (
+        <form className="guess-form" onSubmit={submitGuess}>
+          <input
+            className="input"
+            value={guess}
+            maxLength={24}
+            placeholder="输入答案，先到先得"
+            onChange={(event) => setGuess(event.target.value)}
+          />
+          <button className="btn btn-primary" type="submit" disabled={!guess.trim()}>
+            抢答
+          </button>
+        </form>
+      )}
+
+      {turn.guesses.length > 0 && (
+        <ul className="guess-feed">
+          {turn.guesses
+            .slice()
+            .reverse()
+            .map((item, index) => (
+              <li key={`${item.playerId}-${index}`} className={item.ok ? "ok" : ""}>
+                <b>{item.name}</b>
+                {item.text}
+              </li>
+            ))}
+        </ul>
+      )}
+
+      <p className="screen-foot">先到 {game.targetScore} 分</p>
+    </section>
   );
 }
 
@@ -366,6 +479,7 @@ function TeamCard({
               .filter(Boolean)
               .join(" ")}
           >
+            <AvatarBadge avatar={member.avatar} size={16} />
             {member.name}
           </span>
         ))}
