@@ -12,8 +12,11 @@ import {
   type Player,
   type Role,
   type ServerMessage,
+  type YiyuAction,
 } from "../shared/protocol";
+import { isPlayableGame } from "../shared/games";
 import { RoomManager, type RoomRecord } from "./rooms";
+import { YiyuGame } from "./games/yiyu";
 
 interface Conn {
   id: string;
@@ -43,6 +46,14 @@ const joinSchema = z.object({
 const readySchema = z.object({ ready: z.boolean() });
 const chatSchema = z.object({ text: z.string().trim().min(1).max(MAX_CHAT_LEN) });
 const pingSchema = z.object({ t: z.number() });
+const selectGameSchema = z.object({ gameId: z.string().trim().min(1).max(32) });
+const gameActionSchema = z.object({
+  action: z.discriminatedUnion("type", [
+    z.object({ type: z.literal("correct") }),
+    z.object({ type: z.literal("skip") }),
+    z.object({ type: z.literal("guess"), text: z.string().trim().min(1).max(24) }),
+  ]),
+});
 
 type Parsed = { kind: "ok"; msg: ClientMessage } | { kind: "invalid" } | { kind: "unknown" };
 
@@ -82,6 +93,23 @@ function parseClientMessage(raw: string): Parsed {
       if (!parsed.success) return { kind: "invalid" };
       return { kind: "ok", msg: { ...base, type: "chat.send", data: parsed.data } };
     }
+    case "game.select": {
+      const parsed = selectGameSchema.safeParse(msg.data);
+      if (!parsed.success) return { kind: "invalid" };
+      return { kind: "ok", msg: { ...base, type: "game.select", data: parsed.data } };
+    }
+    case "game.start":
+      return { kind: "ok", msg: { ...base, type: "game.start", data: {} } };
+    case "game.action": {
+      const parsed = gameActionSchema.safeParse(msg.data);
+      if (!parsed.success) return { kind: "invalid" };
+      return {
+        kind: "ok",
+        msg: { ...base, type: "game.action", data: { action: parsed.data.action as YiyuAction } },
+      };
+    }
+    case "game.back":
+      return { kind: "ok", msg: { ...base, type: "game.back", data: {} } };
     case "ping": {
       const parsed = pingSchema.safeParse(msg.data);
       if (!parsed.success) return { kind: "invalid" };
@@ -146,6 +174,17 @@ export class Hub {
     }
   }
 
+  /** 推进所有进行中的游戏（倒计时、揭晓后进入下一回合） */
+  tickGames(now = Date.now()): void {
+    for (const record of this.rooms.all()) {
+      if (!record.game) continue;
+      if (record.game.tick(now)) {
+        record.version += 1;
+        this.broadcast(record.room.code);
+      }
+    }
+  }
+
   private onMessage(conn: Conn, raw: string): void {
     if (raw.length > 64 * 1024) {
       this.fail(conn, "PROTOCOL_ERROR", "消息过大");
@@ -180,6 +219,14 @@ export class Hub {
         return this.setReady(conn, parsed.msg.data.ready);
       case "chat.send":
         return this.chat(conn, parsed.msg.data.text);
+      case "game.select":
+        return this.selectGame(conn, parsed.msg.data.gameId);
+      case "game.start":
+        return this.startGame(conn);
+      case "game.action":
+        return this.gameAction(conn, parsed.msg.data.action);
+      case "game.back":
+        return this.backToLobby(conn);
       case "ping":
         return this.send(conn, {
           v: 1,
@@ -237,6 +284,7 @@ export class Hub {
 
     this.bind(conn, data.code, result.player.id);
     this.clearRemovalTimer(data.code, result.player.id);
+    result.record.game?.setConnected(result.player.id, true);
     this.send(conn, this.stateFor(result.record, result.player));
     this.broadcast(data.code);
   }
@@ -247,6 +295,8 @@ export class Hub {
     conn.roomCode = undefined;
     conn.playerId = undefined;
     this.clearRemovalTimer(roomCode, playerId);
+    const record = this.rooms.get(roomCode);
+    record?.game?.setConnected(playerId, false);
     this.rooms.removePlayer(roomCode, playerId);
     this.broadcast(roomCode);
   }
@@ -284,6 +334,82 @@ export class Hub {
     this.rooms.touch(roomCode);
   }
 
+  private selectGame(conn: Conn, gameId: string): void {
+    const record = this.roomOf(conn);
+    if (!record) return;
+    if (!this.isHost(conn, record)) return;
+    if (record.room.phase !== "lobby") {
+      this.replyError(conn, "BAD_PHASE", "游戏进行中不能换游戏");
+      return;
+    }
+    if (!isPlayableGame(gameId)) {
+      this.replyError(conn, "BAD_PHASE", "这个游戏还没开放");
+      return;
+    }
+    record.gameId = gameId;
+    record.version += 1;
+    this.broadcast(record.room.code);
+  }
+
+  private startGame(conn: Conn): void {
+    const record = this.roomOf(conn);
+    if (!record) return;
+    if (!this.isHost(conn, record)) return;
+
+    if (record.room.phase === "playing") {
+      this.replyError(conn, "BAD_PHASE", "游戏已经开始了");
+      return;
+    }
+    if (!record.gameId || !isPlayableGame(record.gameId)) {
+      this.replyError(conn, "BAD_PHASE", "先选一个游戏");
+      return;
+    }
+
+    const connected = record.room.players.filter((player) => player.connected);
+    if (connected.length < 2) {
+      this.replyError(conn, "BAD_PHASE", "至少需要 2 名玩家");
+      return;
+    }
+    const notReady = connected.filter(
+      (player) => player.id !== record.room.hostId && !player.ready,
+    );
+    if (notReady.length > 0) {
+      this.replyError(conn, "BAD_PHASE", `还有 ${notReady.length} 人没准备`);
+      return;
+    }
+
+    record.game = new YiyuGame(
+      record.room.players,
+      { targetScore: 8, roundSeconds: 60 },
+      Date.now(),
+    );
+    record.room.phase = "playing";
+    record.version += 1;
+    this.broadcast(record.room.code);
+  }
+
+  private gameAction(conn: Conn, action: YiyuAction): void {
+    const record = this.roomOf(conn);
+    if (!record?.game || record.room.phase !== "playing" || !conn.playerId) return;
+    if (record.game.action(conn.playerId, action, Date.now())) {
+      record.version += 1;
+      this.broadcast(record.room.code);
+    }
+  }
+
+  private backToLobby(conn: Conn): void {
+    const record = this.roomOf(conn);
+    if (!record) return;
+    if (!this.isHost(conn, record)) return;
+    if (record.room.phase === "lobby") return;
+
+    record.room.phase = "lobby";
+    record.game = null;
+    for (const player of record.room.players) player.ready = false;
+    record.version += 1;
+    this.broadcast(record.room.code);
+  }
+
   private onClose(conn: Conn): void {
     this.conns.delete(conn.id);
 
@@ -295,6 +421,7 @@ export class Hub {
     if (!record || !player) return;
 
     player.connected = false;
+    record.game?.setConnected(playerId, false);
     record.version += 1;
     this.broadcast(roomCode);
     this.scheduleRemoval(roomCode, playerId);
@@ -326,6 +453,16 @@ export class Hub {
     }
   }
 
+  private roomOf(conn: Conn): RoomRecord | undefined {
+    return conn.roomCode ? this.rooms.get(conn.roomCode) : undefined;
+  }
+
+  private isHost(conn: Conn, record: RoomRecord): boolean {
+    if (record.room.hostId === conn.playerId) return true;
+    this.replyError(conn, "NOT_HOST", "只有房主能做这个操作");
+    return false;
+  }
+
   private bind(conn: Conn, code: string, playerId: string): void {
     conn.roomCode = code;
     conn.playerId = playerId;
@@ -344,6 +481,8 @@ export class Hub {
         version: record.version,
         token: record.tokens.get(player.id) ?? "",
         serverTime: Date.now(),
+        gameId: record.gameId,
+        game: record.game?.viewFor(player.id) ?? null,
       },
     };
   }

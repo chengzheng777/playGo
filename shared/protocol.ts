@@ -49,7 +49,71 @@ export interface RoomStatePayload {
   version: number;
   token: string;
   serverTime: number;
+  gameId: string | null;
+  game: YiyuView | null;
 }
+
+export type YiyuMode = "talk" | "act" | "lip" | "rush";
+export type YiyuTeamId = "A" | "B";
+export type YiyuPhase = "turn" | "reveal" | "ended";
+export type YiyuResult = "correct" | "skip" | "timeout";
+
+export interface YiyuMember {
+  id: string;
+  name: string;
+  connected: boolean;
+}
+
+export interface YiyuTeam {
+  id: YiyuTeamId;
+  name: string;
+  score: number;
+  members: YiyuMember[];
+}
+
+export interface YiyuGuess {
+  playerId: string;
+  name: string;
+  text: string;
+  ok: boolean;
+}
+
+export interface YiyuTurn {
+  teamId: YiyuTeamId;
+  describerId: string;
+  describerName: string;
+  mode: YiyuMode;
+  /** 服务端时间戳，客户端用 serverTime 校准 */
+  deadline: number;
+  /** 只有描述者与揭晓之后才有值 */
+  word?: string;
+  guesses: YiyuGuess[];
+  result?: YiyuResult;
+  winnerName?: string;
+}
+
+export interface YiyuEvent {
+  id: number;
+  kind: "turn" | "correct" | "skip" | "timeout" | "win";
+  text: string;
+}
+
+export interface YiyuView {
+  gameId: "yiyu";
+  phase: YiyuPhase;
+  round: number;
+  targetScore: number;
+  roundSeconds: number;
+  teams: YiyuTeam[];
+  turn: YiyuTurn | null;
+  winnerTeam?: YiyuTeamId;
+  lastEvent: YiyuEvent | null;
+}
+
+export type YiyuAction =
+  | { type: "correct" }
+  | { type: "skip" }
+  | { type: "guess"; text: string };
 
 export type ErrorCode =
   | "PROTOCOL_ERROR"
@@ -78,6 +142,10 @@ export type ClientMessage =
   | (Envelope & { type: "room.leave"; data: Record<string, never> })
   | (Envelope & { type: "player.ready"; data: { ready: boolean } })
   | (Envelope & { type: "chat.send"; data: { text: string } })
+  | (Envelope & { type: "game.select"; data: { gameId: string } })
+  | (Envelope & { type: "game.start"; data: Record<string, never> })
+  | (Envelope & { type: "game.action"; data: { action: YiyuAction } })
+  | (Envelope & { type: "game.back"; data: Record<string, never> })
   | (Envelope & { type: "ping"; data: { t: number } });
 
 export type ServerMessage =

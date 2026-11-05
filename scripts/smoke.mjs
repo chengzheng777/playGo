@@ -150,6 +150,55 @@ async function main() {
   const duplicate = await stranger.next((m) => m.type === "error");
   check("重名被拒绝", duplicate.data.code === "NAME_TAKEN");
 
+  // ---- 游戏大厅 ----
+  console.log("\n游戏大厅与一愚惊人");
+  host.send("game.select", { gameId: "yiyu" });
+  const selected = await host.next((m) => m.type === "room.state" && m.data.gameId === "yiyu");
+  check("房主选择游戏后同步", selected.data.gameId === "yiyu");
+
+  guest2.send("game.select", { gameId: "yiyu" });
+  const notHost = await guest2.next((m) => m.type === "error" && m.data.code === "NOT_HOST");
+  check("非房主不能选游戏", notHost.data.code === "NOT_HOST");
+
+  host.send("game.start", {});
+  const hostStart = await host.next(
+    (m) => m.type === "room.state" && m.data.game?.phase === "turn",
+  );
+  const guestStart = await guest2.next(
+    (m) => m.type === "room.state" && m.data.game?.phase === "turn",
+  );
+  check("游戏开始", hostStart.data.room.phase === "playing");
+  check("分成两队", hostStart.data.game.teams.filter((t) => t.members.length > 0).length === 2);
+
+  const playersInGame = [
+    { client: host, state: hostStart },
+    { client: guest2, state: guestStart },
+  ];
+  const describer = playersInGame.find((entry) => entry.state.data.game.turn.word);
+  const watchers = playersInGame.filter((entry) => !entry.state.data.game.turn.word);
+  check("只有描述者能看到词", describer !== undefined && watchers.length === 1);
+
+  if (describer) {
+    describer.client.send("game.action", { action: { type: "correct" } });
+    const reveal = await host.next(
+      (m) => m.type === "room.state" && m.data.game?.turn?.result === "correct",
+    );
+    check("答对后进入揭晓", reveal.data.game.phase === "reveal");
+    check("得分加一", reveal.data.game.teams.some((team) => team.score === 1));
+
+    const nextRound = await host.next(
+      (m) => m.type === "room.state" && m.data.game?.phase === "turn" && m.data.game.round === 2,
+      6000,
+    );
+    check("揭晓后自动进入下一回合", nextRound.data.game.round === 2);
+  }
+
+  host.send("game.back", {});
+  const backToLobby = await host.next(
+    (m) => m.type === "room.state" && m.data.room.phase === "lobby",
+  );
+  check("结束游戏回到大厅", backToLobby.data.game === null);
+
   host.close();
   guest2.close();
   stranger.close();

@@ -36,11 +36,15 @@
 | `room.create` | C→S | `{name, role}` | 创建房间 |
 | `room.created` | S→C | `{room, token}` | 仅创建者收到；`token` 用于重连 |
 | `room.join` | C→S | `{code, name, role, token?}` | 加入；带 `token` 即重连 |
-| `room.state` | S→C | `{room, you, version, token}` | 全量状态，任何变更后广播 |
+| `room.state` | S→C | `{room, you, version, token, gameId, game, serverTime}` | 全量状态，任何变更后广播 |
 | `room.left` | S→C | `{playerId, reason}` | 玩家离开 |
 | `player.ready` | C→S | `{ready}` | 准备/取消 |
 | `chat.send` | C→S | `{text}` | 文本 ≤ 200 字 |
 | `chat.message` | S→C | `{from, name, text, ts}` | |
+| `game.select` | C→S | `{gameId}` | 仅房主，仅大厅阶段 |
+| `game.start` | C→S | `{}` | 仅房主；所有非房主玩家需已准备，至少 2 人 |
+| `game.action` | C→S | `{action}` | 见第 8 节 |
+| `game.back` | C→S | `{}` | 仅房主；结束本局回大厅 |
 | `game.start` | C→S | `{}` | 仅房主 |
 | `game.state` | S→C | `{view, seq}` | 游戏层数据，按角色裁剪 |
 | `game.action` | C→S | `{action, seq}` | 玩家操作 |
@@ -82,6 +86,9 @@ interface RoomState {
   you: Player;         // 当前连接对应的玩家
   version: number;     // 单调递增，每次变更 +1
   token: string;       // 本连接的重连凭证（每个玩家一份，只发给本人）
+  gameId: string | null;   // 房主选中的游戏
+  game: YiyuView | null;   // 当前游戏视图，按角色裁剪
+  serverTime: number;      // 用于客户端校准倒计时
 }
 ```
 
@@ -162,7 +169,71 @@ interface RoomState {
 
 ---
 
-## 7. M0 不实现（预留）
+## 7. 游戏：一愚惊人
+
+### 7.1 视图
+
+`room.state.data.game` 是按玩家裁剪过的 `YiyuView`：
+
+```ts
+interface YiyuView {
+  gameId: "yiyu";
+  phase: "turn" | "reveal" | "ended";
+  round: number;
+  targetScore: number;      // 8
+  roundSeconds: number;     // 60
+  teams: YiyuTeam[];
+  turn: YiyuTurn | null;
+  winnerTeam?: "A" | "B";
+  lastEvent: YiyuEvent | null;   // 客户端据此触发动画/音效/震动
+}
+
+interface YiyuTurn {
+  teamId: "A" | "B";
+  describerId: string;
+  describerName: string;
+  mode: "talk" | "act" | "lip" | "rush";
+  deadline: number;         // 服务端 epoch ms
+  word?: string;            // 只有描述者本人，或 turn 结束后才有
+  guesses: YiyuGuess[];     // 仅抢答模式
+  result?: "correct" | "skip" | "timeout";
+  winnerName?: string;
+}
+
+interface YiyuEvent {
+  id: number;               // 单调递增，客户端去重
+  kind: "turn" | "correct" | "skip" | "timeout" | "win";
+  text: string;
+}
+```
+
+裁剪规则：`word` 只发给描述者；只要进入 `reveal` / `ended`，所有人可见。
+倒计时不靠推送，客户端用 `room.state.serverTime` 校准本地时钟后自行渲染。
+
+### 7.2 动作
+
+```jsonc
+{ "v": 1, "type": "game.action", "data": { "action": { "type": "correct" } } }
+{ "v": 1, "type": "game.action", "data": { "action": { "type": "skip" } } }
+{ "v": 1, "type": "game.action", "data": { "action": { "type": "guess", "text": "泡面" } } }
+```
+
+- `correct` / `skip`：只有当前回合的描述者能发；其他玩家发送会被静默忽略。
+- `guess`：只在 `mode === "rush"` 且非描述者时有效；答案归一化后全等才算对，首答命中者所在队伍 +1。
+
+### 7.3 回合推进
+
+服务端每 500 ms tick 一次：
+
+1. `turn` 且超过 `deadline` → 记为 `timeout`，进入 `reveal`（约 2.3 秒）；
+2. `reveal` 到时 → 切下一队、下一位描述者、随机模式与词，进入新的 `turn`；
+3. 某队分数达到 `targetScore` → `ended`，广播 `winnerTeam`。
+
+描述者掉线不会卡住回合：到点自动结算，下回合会跳过未连接的队员。
+
+---
+
+## 8. M0 不实现（预留）
 
 - 二进制帧 / 增量补丁（`state.delta`）
 - 房间列表与发现（本机多房间）

@@ -7,6 +7,7 @@ import {
   type Role,
   type Room,
 } from "../shared/protocol";
+import type { YiyuGame } from "./games/yiyu";
 
 export interface RoomRecord {
   room: Room;
@@ -14,6 +15,10 @@ export interface RoomRecord {
   /** playerId -> 重连 token */
   tokens: Map<string, string>;
   lastActiveAt: number;
+  /** 房主选中的游戏 */
+  gameId: string | null;
+  /** 进行中的游戏实例 */
+  game: YiyuGame | null;
 }
 
 export type JoinError = "ROOM_NOT_FOUND" | "ROOM_FULL" | "NAME_TAKEN" | "BAD_TOKEN" | "BAD_PHASE";
@@ -45,6 +50,10 @@ export class RoomManager {
     return this.rooms.get(code);
   }
 
+  all(): IterableIterator<RoomRecord> {
+    return this.rooms.values();
+  }
+
   get size(): number {
     return this.rooms.size;
   }
@@ -74,6 +83,8 @@ export class RoomManager {
       version: 1,
       tokens: new Map([[player.id, token]]),
       lastActiveAt: Date.now(),
+      gameId: null,
+      game: null,
     };
     this.rooms.set(code, record);
     return { record, player, token };

@@ -170,8 +170,10 @@ server.on("upgrade", (req, socket, head) => {
 
 const heartbeat = setInterval(() => hub.sweep(), 30_000);
 const sweeper = setInterval(() => rooms.sweepEmpty(), 30_000);
+const gameTicker = setInterval(() => hub.tickGames(), 500);
 heartbeat.unref();
 sweeper.unref();
+gameTicker.unref();
 
 server.listen(port, "0.0.0.0", () => {
   const urls = lanAddresses();
@@ -192,6 +194,7 @@ server.listen(port, "0.0.0.0", () => {
 function shutdown(): void {
   clearInterval(heartbeat);
   clearInterval(sweeper);
+  clearInterval(gameTicker);
   for (const client of wss.clients) client.terminate();
   wss.close();
   server.close();

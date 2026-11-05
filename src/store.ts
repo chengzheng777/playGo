@@ -6,6 +6,8 @@ import type {
   Player,
   Room,
   ServerMessage,
+  YiyuAction,
+  YiyuView,
 } from "../shared/protocol";
 
 const NAME_KEY = "playgo:name";
@@ -26,6 +28,10 @@ export interface AppState {
   error: string | null;
   busy: boolean;
   nickname: string;
+  gameId: string | null;
+  game: YiyuView | null;
+  /** 服务端时间 - 本地时间，用于倒计时校准 */
+  serverOffset: number;
 }
 
 function readName(): string {
@@ -75,6 +81,9 @@ class Store {
       error: null,
       busy: false,
       nickname,
+      gameId: null,
+      game: null,
+      serverOffset: 0,
     };
 
     if (route.view === "join") {
@@ -145,6 +154,22 @@ class Store {
     this.send({ v: 1, type: "chat.send", data: { text: trimmed } });
   }
 
+  selectGame(gameId: string): void {
+    this.send({ v: 1, type: "game.select", data: { gameId } });
+  }
+
+  startGame(): void {
+    this.send({ v: 1, type: "game.start", data: {} });
+  }
+
+  gameAction(action: YiyuAction): void {
+    this.send({ v: 1, type: "game.action", data: { action } });
+  }
+
+  backToLobby(): void {
+    this.send({ v: 1, type: "game.back", data: {} });
+  }
+
   leave(): void {
     this.closedByUs = true;
     this.send({ v: 1, type: "room.leave", data: {} });
@@ -172,6 +197,8 @@ class Store {
       busy: false,
       error: null,
       joinCode: "",
+      gameId: null,
+      game: null,
     });
     history.replaceState(null, "", "/");
   }
@@ -313,13 +340,15 @@ class Store {
           busy: false,
           conn: "open",
           error: null,
+          gameId: null,
+          game: null,
         });
         history.replaceState(null, "", `/r/${room.code}`);
         return;
       }
 
       case "room.state": {
-        const { room, you, version, token } = message.data;
+        const { room, you, version, token, gameId, game, serverTime } = message.data;
         this.applySession(room.code, token);
         const wasLobby = this.state.view === "lobby";
         this.set({
@@ -329,6 +358,9 @@ class Store {
           version,
           busy: false,
           conn: "open",
+          gameId,
+          game,
+          serverOffset: serverTime - Date.now(),
         });
         if (!wasLobby) history.replaceState(null, "", `/r/${room.code}`);
         return;
@@ -360,6 +392,8 @@ class Store {
         busy: false,
         conn: "closed",
         error: `${text}，请重新创建房间`,
+        gameId: null,
+        game: null,
       });
       history.replaceState(null, "", "/");
       return;
