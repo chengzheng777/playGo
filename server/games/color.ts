@@ -19,8 +19,6 @@ const PALETTE: ColorTarget[] = [
   { name: "奶油白", hex: "#F5F0E1" },
 ];
 
-const RANK_POINTS = [100, 80, 60, 50, 40, 30, 20, 10];
-
 export interface ColorOptions {
   hostId: string;
   rounds?: number;
@@ -224,9 +222,10 @@ export class ColorGame {
       }))
       .sort((a, b) => a.distance - b.distance);
 
-    this.results = entries.map((entry, index) => {
-      const points = RANK_POINTS[index] ?? 0;
-      entry.player.score += points;
+    this.results = entries.map((entry) => {
+      // 得分 = 100 - 色差，最高 100，保留一位小数；排名只决定展示顺序
+      const points = Math.max(0, Math.round((100 - entry.distance) * 10) / 10);
+      entry.player.score = Math.round((entry.player.score + points) * 10) / 10;
       return {
         playerId: entry.player.id,
         name: entry.player.name,

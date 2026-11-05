@@ -12,6 +12,10 @@ const CONN_LABEL: Record<string, string> = {
   closed: "已断开",
 };
 
+function formatPoints(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 export function ColorGameView() {
   const state = useAppState();
   const room = state.room;
@@ -203,7 +207,7 @@ export function ColorGameView() {
                           style={{ background: rgbText(result.rgb) }}
                         />
                         <span>差 {result.distance}</span>
-                        <span className="polaroid-points">+{result.points}</span>
+                        <span className="polaroid-points">+{formatPoints(result.points)}</span>
                       </div>
                     </figcaption>
                   </figure>
@@ -221,7 +225,7 @@ export function ColorGameView() {
                     </div>
                     <div className="color-result-line">
                       <span>色差 {myResult.distance}</span>
-                      <b>+{myResult.points} 分</b>
+                      <b>+{formatPoints(myResult.points)} 分</b>
                     </div>
                   </>
                 ) : (
@@ -240,7 +244,7 @@ export function ColorGameView() {
                   <span className="color-rank">{index + 1}</span>
                   <AvatarBadge avatar={player.avatar} size={26} />
                   <span className="color-row-name">{player.name}</span>
-                  <b className="color-score">{player.score}</b>
+                  <b className="color-score">{formatPoints(player.score)}</b>
                 </div>
               ))}
             </div>
