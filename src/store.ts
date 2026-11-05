@@ -8,8 +8,10 @@ import type {
   Room,
   ServerMessage,
   YiyuAction,
+  YiyuSettings,
   YiyuView,
 } from "../shared/protocol";
+import { DEFAULT_SETTINGS } from "../shared/protocol";
 
 const NAME_KEY = "playgo:name";
 const TOKEN_PREFIX = "playgo:token:";
@@ -30,6 +32,7 @@ export interface AppState {
   busy: boolean;
   nickname: string;
   gameId: string | null;
+  settings: YiyuSettings;
   game: YiyuView | null;
   /** 服务端时间 - 本地时间，用于倒计时校准 */
   serverOffset: number;
@@ -83,6 +86,7 @@ class Store {
       busy: false,
       nickname,
       gameId: null,
+      settings: { ...DEFAULT_SETTINGS },
       game: null,
       serverOffset: 0,
     };
@@ -163,6 +167,10 @@ class Store {
     this.send({ v: 1, type: "game.select", data: { gameId } });
   }
 
+  updateSettings(settings: YiyuSettings): void {
+    this.send({ v: 1, type: "game.settings", data: { settings } });
+  }
+
   startGame(): void {
     this.send({ v: 1, type: "game.start", data: {} });
   }
@@ -203,6 +211,7 @@ class Store {
       error: null,
       joinCode: "",
       gameId: null,
+      settings: { ...DEFAULT_SETTINGS },
       game: null,
     });
     history.replaceState(null, "", "/");
@@ -349,6 +358,7 @@ class Store {
           conn: "open",
           error: null,
           gameId: null,
+          settings: { ...DEFAULT_SETTINGS },
           game: null,
         });
         history.replaceState(null, "", `/r/${room.code}`);
@@ -356,7 +366,7 @@ class Store {
       }
 
       case "room.state": {
-        const { room, you, version, token, gameId, game, serverTime } = message.data;
+        const { room, you, version, token, gameId, settings, game, serverTime } = message.data;
         this.applySession(room.code, token);
         const wasLobby = this.state.view === "lobby";
         this.set({
@@ -367,6 +377,7 @@ class Store {
           busy: false,
           conn: "open",
           gameId,
+          settings,
           game,
           serverOffset: serverTime - Date.now(),
         });
@@ -414,6 +425,7 @@ class Store {
         conn: "closed",
         error: `${text}，请重新创建房间`,
         gameId: null,
+        settings: { ...DEFAULT_SETTINGS },
         game: null,
       });
       history.replaceState(null, "", "/");

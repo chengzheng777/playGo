@@ -332,6 +332,7 @@ select {
   width: 100%;
   max-width: 620px;
   margin: 0 auto;
+  padding-bottom: 28px;
 }
 
 .col {
@@ -1748,4 +1749,93 @@ select {
   font-size: 12px;
   color: var(--muted);
   text-align: center;
+}
+
+/* ============================================================
+   规则设置 / 当前游戏
+   ============================================================ */
+
+.settings-panel {
+  gap: 12px;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.segmented {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--line);
+}
+
+.segmented button {
+  min-width: 44px;
+  height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.segmented button:hover {
+  color: var(--text);
+}
+
+.segmented button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.current-game {
+  gap: 12px;
+}
+
+.cg-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cg-emoji {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.cg-name {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.cg-tag {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.cg-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+  color: var(--muted);
 }

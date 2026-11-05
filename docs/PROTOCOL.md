@@ -43,6 +43,7 @@
 | `chat.send` | C→S | `{text}` | 文本 ≤ 200 字 |
 | `chat.message` | S→C | `{from, name, text, ts}` | |
 | `game.select` | C→S | `{gameId}` | 仅房主，仅大厅阶段 |
+| `game.settings` | C→S | `{settings}` | 仅房主、仅大厅；目标分 3–20，回合 15–180 秒 |
 | `game.start` | C→S | `{}` | 仅房主；至少 2 名已准备的手机玩家 |
 | `game.action` | C→S | `{action}` | 见第 7 节 |
 | `game.back` | C→S | `{}` | 仅房主；结束本局回大厅 |
@@ -90,8 +91,14 @@ interface RoomState {
   version: number;     // 单调递增，每次变更 +1
   token: string;       // 本连接的重连凭证（每个玩家一份，只发给本人）
   gameId: string | null;   // 房主选中的游戏
+  settings: YiyuSettings;  // 房主配置的规则
   game: YiyuView | null;   // 当前游戏视图，按角色裁剪
   serverTime: number;      // 用于客户端校准倒计时
+}
+
+interface YiyuSettings {
+  targetScore: number;     // 默认 8，允许 3–20
+  roundSeconds: number;    // 默认 60，允许 15–180
 }
 ```
 

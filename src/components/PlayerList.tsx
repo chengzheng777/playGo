@@ -28,7 +28,7 @@ export function PlayerList({
             <span className="tags">
               {player.id === hostId && <span className="tag tag-host">大屏</span>}
               {player.ready && player.id !== hostId && (
-                <span className="tag tag-ready">已准备</span>
+                <span className="tag tag-ready">已加入</span>
               )}
               {!player.connected && <span className="tag tag-off">掉线</span>}
             </span>

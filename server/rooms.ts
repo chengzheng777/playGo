@@ -1,11 +1,13 @@
 import { randomBytes } from "node:crypto";
 import {
+  DEFAULT_SETTINGS,
   MAX_PLAYERS,
   ROOM_CODE_ALPHABET,
   ROOM_CODE_LEN,
   type Player,
   type Role,
   type Room,
+  type YiyuSettings,
 } from "../shared/protocol";
 import type { YiyuGame } from "./games/yiyu";
 import { defaultAvatar } from "../shared/avatars";
@@ -18,6 +20,8 @@ export interface RoomRecord {
   lastActiveAt: number;
   /** 房主选中的游戏 */
   gameId: string | null;
+  /** 房主配置的规则 */
+  settings: YiyuSettings;
   /** 进行中的游戏实例 */
   game: YiyuGame | null;
 }
@@ -86,6 +90,7 @@ export class RoomManager {
       tokens: new Map([[player.id, token]]),
       lastActiveAt: Date.now(),
       gameId: null,
+      settings: { ...DEFAULT_SETTINGS },
       game: null,
     };
     this.rooms.set(code, record);
@@ -172,6 +177,15 @@ export class RoomManager {
     record.version += 1;
     record.lastActiveAt = Date.now();
     return player;
+  }
+
+  setSettings(code: string, settings: YiyuSettings): boolean {
+    const record = this.rooms.get(code);
+    if (!record) return false;
+    record.settings = { ...settings };
+    record.version += 1;
+    record.lastActiveAt = Date.now();
+    return true;
   }
 
   setAvatar(code: string, playerId: string, avatar: { text: string; color: string }): Player | undefined {

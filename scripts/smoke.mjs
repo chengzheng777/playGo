@@ -160,6 +160,18 @@ async function main() {
   const notHost = await guest2.next((m) => m.type === "error" && m.data.code === "NOT_HOST");
   check("非房主不能选游戏", notHost.data.code === "NOT_HOST");
 
+  host.send("game.settings", { settings: { targetScore: 5, roundSeconds: 45 } });
+  const settingsState = await host.next(
+    (m) => m.type === "room.state" && m.data.settings?.targetScore === 5,
+  );
+  check("房主修改规则并同步", settingsState.data.settings.roundSeconds === 45);
+
+  guest2.send("game.settings", { settings: { targetScore: 9, roundSeconds: 30 } });
+  const settingsDenied = await guest2.next(
+    (m) => m.type === "error" && m.data.code === "NOT_HOST",
+  );
+  check("非房主不能改规则", settingsDenied.data.code === "NOT_HOST");
+
   // 只有 1 名手机玩家（房主不参赛）时不能开始
   host.send("game.start", {});
   const tooFew = await host.next((m) => m.type === "error" && m.data.code === "BAD_PHASE");
@@ -197,6 +209,10 @@ async function main() {
     (m) => m.type === "room.state" && m.data.game?.phase === "turn",
   );
   check("游戏开始", hostStart.data.room.phase === "playing");
+  check(
+    "规则按房主配置生效",
+    hostStart.data.game.roundSeconds === 45 && hostStart.data.game.targetScore === 5,
+  );
   check(
     "房主是大屏、不参赛",
     hostStart.data.game.teams.every((team) =>

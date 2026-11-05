@@ -58,8 +58,19 @@ export interface RoomStatePayload {
   token: string;
   serverTime: number;
   gameId: string | null;
+  settings: YiyuSettings;
   game: YiyuView | null;
 }
+
+/** 房主可改的规则，开局时生效 */
+export interface YiyuSettings {
+  /** 先到多少分获胜 */
+  targetScore: number;
+  /** 每回合多少秒 */
+  roundSeconds: number;
+}
+
+export const DEFAULT_SETTINGS: YiyuSettings = { targetScore: 8, roundSeconds: 60 };
 
 export type YiyuMode = "talk" | "act" | "lip" | "rush";
 export type YiyuTeamId = "A" | "B";
@@ -153,6 +164,7 @@ export type ClientMessage =
   | (Envelope & { type: "player.avatar"; data: { avatar: Avatar } })
   | (Envelope & { type: "chat.send"; data: { text: string } })
   | (Envelope & { type: "game.select"; data: { gameId: string } })
+  | (Envelope & { type: "game.settings"; data: { settings: YiyuSettings } })
   | (Envelope & { type: "game.start"; data: Record<string, never> })
   | (Envelope & { type: "game.action"; data: { action: YiyuAction } })
   | (Envelope & { type: "game.back"; data: Record<string, never> })

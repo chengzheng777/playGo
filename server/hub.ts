@@ -14,6 +14,7 @@ import {
   type Role,
   type ServerMessage,
   type YiyuAction,
+  type YiyuSettings,
 } from "../shared/protocol";
 import { isPlayableGame } from "../shared/games";
 import { RoomManager, type RoomRecord } from "./rooms";
@@ -54,6 +55,12 @@ const avatarSchema = z.object({
 const chatSchema = z.object({ text: z.string().trim().min(1).max(MAX_CHAT_LEN) });
 const pingSchema = z.object({ t: z.number() });
 const selectGameSchema = z.object({ gameId: z.string().trim().min(1).max(32) });
+const settingsSchema = z.object({
+  settings: z.object({
+    targetScore: z.number().int().min(3).max(20),
+    roundSeconds: z.number().int().min(15).max(180),
+  }),
+});
 const gameActionSchema = z.object({
   action: z.discriminatedUnion("type", [
     z.object({ type: z.literal("correct") }),
@@ -109,6 +116,11 @@ function parseClientMessage(raw: string): Parsed {
       const parsed = selectGameSchema.safeParse(msg.data);
       if (!parsed.success) return { kind: "invalid" };
       return { kind: "ok", msg: { ...base, type: "game.select", data: parsed.data } };
+    }
+    case "game.settings": {
+      const parsed = settingsSchema.safeParse(msg.data);
+      if (!parsed.success) return { kind: "invalid" };
+      return { kind: "ok", msg: { ...base, type: "game.settings", data: parsed.data } };
     }
     case "game.start":
       return { kind: "ok", msg: { ...base, type: "game.start", data: {} } };
@@ -243,6 +255,8 @@ export class Hub {
         return this.chat(conn, parsed.msg.data.text);
       case "game.select":
         return this.selectGame(conn, parsed.msg.data.gameId);
+      case "game.settings":
+        return this.setSettings(conn, parsed.msg.data.settings);
       case "game.start":
         return this.startGame(conn);
       case "game.action":
@@ -389,6 +403,21 @@ export class Hub {
     this.broadcast(record.room.code);
   }
 
+  private setSettings(conn: Conn, settings: YiyuSettings): void {
+    const record = this.roomOf(conn);
+    if (!record) {
+      this.replyError(conn, "ROOM_NOT_FOUND", "房间已失效，请重新创建");
+      return;
+    }
+    if (!this.isHost(conn, record)) return;
+    if (record.room.phase !== "lobby") {
+      this.replyError(conn, "BAD_PHASE", "开局后不能再改规则");
+      return;
+    }
+    this.rooms.setSettings(record.room.code, settings);
+    this.broadcast(record.room.code);
+  }
+
   private startGame(conn: Conn): void {
     const record = this.roomOf(conn);
     if (!record) {
@@ -423,7 +452,7 @@ export class Hub {
 
     record.game = new YiyuGame(
       record.room.players,
-      { targetScore: 8, roundSeconds: 60, hostId: record.room.hostId },
+      { ...record.settings, hostId: record.room.hostId },
       Date.now(),
     );
     record.room.phase = "playing";
@@ -525,6 +554,7 @@ export class Hub {
         token: record.tokens.get(player.id) ?? "",
         serverTime: Date.now(),
         gameId: record.gameId,
+        settings: { ...record.settings },
         game: record.game?.viewFor(player.id) ?? null,
       },
     };
