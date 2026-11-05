@@ -1,11 +1,15 @@
 import { useState } from "react";
+import { AvatarBadge } from "../components/Avatar";
 import { store, useAppState } from "../store";
 
 export function JoinView() {
   const state = useAppState();
-  const [name, setName] = useState(state.nickname);
+  const profile = state.profile;
   const [code, setCode] = useState(state.joinCode);
-  const canJoin = name.trim().length > 0 && code.length === 4 && !state.busy;
+
+  if (!profile) return null;
+
+  const canJoin = code.length === 4 && !state.busy;
 
   return (
     <div className="home join">
@@ -35,31 +39,24 @@ export function JoinView() {
           )}
         </div>
 
-        <label className="label" htmlFor="join-name">
-          你的名字
-        </label>
-        <input
-          id="join-name"
-          className="input"
-          value={name}
-          maxLength={16}
-          placeholder="比如：小明"
-          autoComplete="nickname"
-          onChange={(event) => setName(event.target.value)}
-        />
+        <div className="join-user">
+          <AvatarBadge avatar={profile.avatar} size={34} />
+          <span className="join-user-name">{profile.name}</span>
+          <span className="count">用这个身份加入</span>
+        </div>
 
         <button
           className="btn btn-primary"
           disabled={!canJoin}
-          onClick={() => store.joinRoom(code, name)}
+          onClick={() => store.joinRoom(code, profile.name)}
         >
           {state.busy ? "进入中…" : "进入房间"}
         </button>
-        <p className="hint">名字会显示在房间里，重名的话换一个。</p>
+        <p className="hint">头像和名字会一起带进房间，进去后还能改。</p>
       </section>
 
       <button className="link" onClick={() => store.leave()}>
-        我自己开一个房间
+        返回大厅
       </button>
     </div>
   );

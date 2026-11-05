@@ -12,6 +12,7 @@ import type {
   YiyuView,
 } from "../shared/protocol";
 import { DEFAULT_SETTINGS } from "../shared/protocol";
+import { defaultAvatar } from "../shared/avatars";
 
 const NAME_KEY = "playgo:name";
 const TOKEN_PREFIX = "playgo:token:";
@@ -19,6 +20,12 @@ const MAX_CHAT_HISTORY = 100;
 
 export type View = "home" | "join" | "lobby";
 export type ConnState = "idle" | "connecting" | "open" | "reconnecting" | "closed";
+
+/** 本机用户资料，存在 localStorage，第一次打开时创建 */
+export interface Profile {
+  name: string;
+  avatar: Avatar;
+}
 
 export interface AppState {
   view: View;
@@ -31,6 +38,7 @@ export interface AppState {
   error: string | null;
   busy: boolean;
   nickname: string;
+  profile: Profile | null;
   gameId: string | null;
   settings: YiyuSettings;
   game: YiyuView | null;
@@ -44,6 +52,22 @@ function readName(): string {
   } catch {
     return "";
   }
+}
+
+function readProfile(): Profile | null {
+  try {
+    const raw = localStorage.getItem("playgo:profile");
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<Profile>;
+      if (parsed.name && parsed.avatar?.text && parsed.avatar?.color) {
+        return { name: parsed.name, avatar: parsed.avatar };
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  const legacy = readName();
+  return legacy ? { name: legacy, avatar: defaultAvatar(legacy) } : null;
 }
 
 function readToken(code: string): string | null {
@@ -73,7 +97,8 @@ class Store {
 
   constructor() {
     const route = readRoute();
-    const nickname = readName();
+    const profile = readProfile();
+    const nickname = profile?.name ?? readName();
     const base: AppState = {
       view: "home",
       joinCode: route.code,
@@ -85,6 +110,7 @@ class Store {
       error: null,
       busy: false,
       nickname,
+      profile,
       gameId: null,
       settings: { ...DEFAULT_SETTINGS },
       game: null,
@@ -175,8 +201,25 @@ class Store {
     this.send({ v: 1, type: "player.ready", data: { ready: !you.ready } });
   }
 
-  updateAvatar(avatar: Avatar): void {
-    this.send({ v: 1, type: "player.avatar", data: { avatar } });
+  /** 保存本机用户资料；在房间里则同步给其他人 */
+  saveProfile(profile: Profile): void {
+    const clean: Profile = {
+      name: profile.name.trim().slice(0, 16),
+      avatar: profile.avatar,
+    };
+    if (!clean.name) return;
+
+    this.set({ profile: clean, nickname: clean.name });
+    try {
+      localStorage.setItem("playgo:profile", JSON.stringify(clean));
+      localStorage.setItem(NAME_KEY, clean.name);
+    } catch {
+      /* ignore */
+    }
+
+    if (this.state.you) {
+      this.send({ v: 1, type: "player.update", data: { name: clean.name, avatar: clean.avatar } });
+    }
   }
 
   sendChat(text: string): void {

@@ -192,7 +192,7 @@ async function main() {
   await carol.next((m) => m.type === "room.state" && m.data.you.name === "Carol");
   check("第三名玩家加入", true);
 
-  carol.send("player.avatar", { avatar: { text: "🦊", color: "#38bdf8" } });
+  carol.send("player.update", { avatar: { text: "🦊", color: "#38bdf8" } });
   const avatarState = await host.next(
     (m) =>
       m.type === "room.state" &&
@@ -284,6 +284,13 @@ async function main() {
   guest2.close();
   carol.close();
   stranger.close();
+
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  const list3 = await fetch(`${BASE}/api/rooms`).then((r) => r.json());
+  check(
+    "全员离线后房间从列表消失",
+    !list3.rooms.some((room) => room.code === code),
+  );
 
   console.log(`\n通过 ${passed} 项，失败 ${failures.length} 项`);
   if (failures.length > 0) {

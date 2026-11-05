@@ -1962,3 +1962,92 @@ select {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* 用户栏 / 用户资料 */
+.profile-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.profile-bar:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.profile-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.profile-edit {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.profile-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.avatar-preview .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.create-as {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.create-as b {
+  color: var(--text);
+}
+
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.home-mobile {
+  gap: 12px;
+  padding-top: max(20px, env(safe-area-inset-top));
+}
+
+.home-mobile .brand-mark {
+  font-size: 34px;
+}
+
+.home-mobile .brand-sub {
+  font-size: 13px;
+}
+
+.home-mobile .rooms-panel {
+  margin-top: 2px;
+}
+
+/* 加入页的当前用户 */
+.join-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.join-user-name {
+  font-size: 15px;
+  font-weight: 600;
+}

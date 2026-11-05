@@ -33,13 +33,13 @@
 | type | 方向 | data | 说明 |
 | --- | --- | --- | --- |
 | `welcome` | S→C | `{clientId, protocol, serverTime}` | 连接建立后立即下发 |
-| `room.create` | C→S | `{name, role, gameId?}` | 创建房间，可带上大厅里选好的游戏 |
+| `room.create` | C→S | `{name, role, gameId?, avatar?}` | 创建房间，可带上大厅里选好的游戏与本机头像 |
 | `room.created` | S→C | `{room, token}` | 仅创建者收到；`token` 用于重连 |
-| `room.join` | C→S | `{code, name, role, token?}` | 加入；带 `token` 即重连 |
+| `room.join` | C→S | `{code, name, role, token?, avatar?}` | 加入；带 `token` 即重连 |
 | `room.state` | S→C | `{room, you, version, token, gameId, game, serverTime}` | 全量状态，任何变更后广播 |
 | `room.left` | S→C | `{playerId, reason}` | 玩家离开 |
 | `player.ready` | C→S | `{ready}` | 准备/取消 |
-| `player.avatar` | C→S | `{avatar: {text, color}}` | 换头像，随后广播 |
+| `player.update` | C→S | `{name?, avatar?}` | 修改用户资料，随后广播 |
 | `chat.send` | C→S | `{text}` | 文本 ≤ 200 字 |
 | `chat.message` | S→C | `{from, name, text, ts}` | |
 | `game.select` | C→S | `{gameId}` | 仅房主，仅大厅阶段 |

@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import { useState } from "react";
 import { GAME_CATALOG } from "../../shared/games";
 import { AvatarBadge } from "../components/Avatar";
-import { AvatarPicker } from "../components/AvatarPicker";
+import { ProfileEditor } from "../components/ProfileEditor";
 import { ChatPanel } from "../components/ChatPanel";
 import { PlayerList } from "../components/PlayerList";
 import { QrCard } from "../components/QrCard";
@@ -221,15 +221,24 @@ export function LobbyView() {
       </footer>
 
       {avatarOpen && (
-        <AvatarPicker
-          name={you.name}
-          current={you.avatar}
-          onClose={() => setAvatarOpen(false)}
-          onSave={(avatar) => {
-            store.updateAvatar(avatar);
-            setAvatarOpen(false);
-          }}
-        />
+        <div className="modal-mask" onClick={() => setAvatarOpen(false)}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-head">
+              <h3>用户资料</h3>
+              <button className="btn btn-ghost btn-mini" onClick={() => setAvatarOpen(false)}>
+                关闭
+              </button>
+            </div>
+            <ProfileEditor
+              initial={{ name: you.name, avatar: you.avatar }}
+              onCancel={() => setAvatarOpen(false)}
+              onSave={(next) => {
+                store.saveProfile(next);
+                setAvatarOpen(false);
+              }}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

@@ -37,24 +37,28 @@ const RECONNECT_GRACE_MS = 90_000;
 
 const roleSchema = z.enum(["screen", "player", "spectator"]);
 const nameSchema = z.string().trim().min(1).max(MAX_NAME_LEN);
+const avatarShape = z.object({
+  text: z.string().trim().min(1).max(8),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+});
 
 const createSchema = z.object({
   name: nameSchema,
   role: roleSchema,
   gameId: z.string().trim().max(32).optional(),
+  avatar: avatarShape.optional(),
 });
 const joinSchema = z.object({
   code: z.string().trim().toUpperCase().refine(isRoomCode, "invalid room code"),
   name: nameSchema.optional(),
   role: roleSchema.optional(),
   token: z.string().length(32).optional(),
+  avatar: avatarShape.optional(),
 });
 const readySchema = z.object({ ready: z.boolean() });
-const avatarSchema = z.object({
-  avatar: z.object({
-    text: z.string().trim().min(1).max(8),
-    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  }),
+const profileSchema = z.object({
+  name: nameSchema.optional(),
+  avatar: avatarShape.optional(),
 });
 const chatSchema = z.object({ text: z.string().trim().min(1).max(MAX_CHAT_LEN) });
 const pingSchema = z.object({ t: z.number() });
@@ -106,10 +110,10 @@ function parseClientMessage(raw: string): Parsed {
       if (!parsed.success) return { kind: "invalid" };
       return { kind: "ok", msg: { ...base, type: "player.ready", data: parsed.data } };
     }
-    case "player.avatar": {
-      const parsed = avatarSchema.safeParse(msg.data);
+    case "player.update": {
+      const parsed = profileSchema.safeParse(msg.data);
       if (!parsed.success) return { kind: "invalid" };
-      return { kind: "ok", msg: { ...base, type: "player.avatar", data: parsed.data } };
+      return { kind: "ok", msg: { ...base, type: "player.update", data: parsed.data } };
     }
     case "chat.send": {
       const parsed = chatSchema.safeParse(msg.data);
@@ -251,6 +255,7 @@ export class Hub {
           parsed.msg.data.name,
           parsed.msg.data.role,
           parsed.msg.data.gameId,
+          parsed.msg.data.avatar,
         );
       case "room.join":
         return this.joinRoom(conn, parsed.msg.data);
@@ -258,8 +263,8 @@ export class Hub {
         return this.leaveRoom(conn);
       case "player.ready":
         return this.setReady(conn, parsed.msg.data.ready);
-      case "player.avatar":
-        return this.setAvatar(conn, parsed.msg.data.avatar);
+      case "player.update":
+        return this.setProfile(conn, parsed.msg.data);
       case "chat.send":
         return this.chat(conn, parsed.msg.data.text);
       case "game.select":
@@ -281,13 +286,19 @@ export class Hub {
     }
   }
 
-  private createRoom(conn: Conn, name: string, role: Role, gameId?: string): void {
+  private createRoom(
+    conn: Conn,
+    name: string,
+    role: Role,
+    gameId?: string,
+    avatar?: Avatar,
+  ): void {
     if (conn.roomCode) {
       this.replyError(conn, "BAD_PHASE", "你已经在一个房间里了");
       return;
     }
     const initialGame = gameId && isPlayableGame(gameId) ? gameId : null;
-    const { record, player, token } = this.rooms.create(name, role, initialGame);
+    const { record, player, token } = this.rooms.create(name, role, initialGame, avatar);
     this.bind(conn, record.room.code, player.id);
     this.send(conn, {
       v: 1,
@@ -299,7 +310,7 @@ export class Hub {
 
   private joinRoom(
     conn: Conn,
-    data: { code: string; name?: string; role?: Role; token?: string },
+    data: { code: string; name?: string; role?: Role; token?: string; avatar?: Avatar },
   ): void {
     if (conn.roomCode) {
       this.replyError(conn, "BAD_PHASE", "你已经在一个房间里了");
@@ -308,7 +319,7 @@ export class Hub {
 
     const result = data.token
       ? this.rooms.reconnect(data.code, data.token)
-      : this.rooms.join(data.code, data.name ?? "", data.role ?? "player");
+      : this.rooms.join(data.code, data.name ?? "", data.role ?? "player", data.avatar);
 
     if (!result.ok) {
       this.replyError(conn, result.error, this.joinErrorMessage(result.error));
@@ -354,16 +365,30 @@ export class Hub {
     this.broadcast(roomCode);
   }
 
-  private setAvatar(conn: Conn, avatar: Avatar): void {
+  private setProfile(conn: Conn, data: { name?: string; avatar?: Avatar }): void {
     const { roomCode, playerId } = conn;
     if (!roomCode || !playerId) return;
-    const text = [...avatar.text.trim()].slice(0, 2).join("");
-    if (!text) return;
-    const changed = this.rooms.setAvatar(roomCode, playerId, {
-      text,
-      color: avatar.color.toLowerCase(),
-    });
-    if (!changed) return;
+    const record = this.rooms.get(roomCode);
+    const player = record?.room.players.find((item) => item.id === playerId);
+    if (!record || !player) return;
+
+    if (data.name) {
+      const name = data.name.trim().slice(0, MAX_NAME_LEN);
+      const taken = record.room.players.some(
+        (item) => item.id !== player.id && item.name.toLowerCase() === name.toLowerCase(),
+      );
+      if (name && !taken) player.name = name;
+    }
+
+    if (data.avatar) {
+      const text = [...data.avatar.text.trim()].slice(0, 2).join("");
+      if (text) {
+        player.avatar = { text, color: data.avatar.color.toLowerCase() };
+      }
+    }
+
+    record.version += 1;
+    record.lastActiveAt = Date.now();
     this.broadcast(roomCode);
   }
 

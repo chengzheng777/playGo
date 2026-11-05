@@ -60,9 +60,10 @@ export class RoomManager {
     return this.rooms.values();
   }
 
-  /** 大厅房间列表：只暴露公开信息，按创建时间倒序 */
+  /** 大厅房间列表：只暴露公开信息，按创建时间倒序；没人在线的房间不展示 */
   list(limit = 30): RoomSummary[] {
     return [...this.rooms.values()]
+      .filter((record) => record.room.players.some((player) => player.connected))
       .map((record) => ({
         code: record.room.code,
         hostName:
@@ -86,12 +87,13 @@ export class RoomManager {
     name: string,
     role: Role,
     gameId: string | null = null,
+    avatar?: { text: string; color: string },
   ): { record: RoomRecord; player: Player; token: string } {
     const code = this.uniqueCode();
     const player: Player = {
       id: shortId("p"),
       name: name.trim().slice(0, 16),
-      avatar: defaultAvatar(name),
+      avatar: avatar ?? defaultAvatar(name),
       role,
       seat: 0,
       ready: false,
@@ -120,7 +122,12 @@ export class RoomManager {
     return { record, player, token };
   }
 
-  join(code: string, name: string, role: Role): JoinResult {
+  join(
+    code: string,
+    name: string,
+    role: Role,
+    avatar?: { text: string; color: string },
+  ): JoinResult {
     const record = this.rooms.get(code);
     if (!record) return { ok: false, error: "ROOM_NOT_FOUND" };
     if (record.room.phase !== "lobby") return { ok: false, error: "BAD_PHASE" };
@@ -135,7 +142,7 @@ export class RoomManager {
     const player: Player = {
       id: shortId("p"),
       name: trimmed,
-      avatar: defaultAvatar(trimmed),
+      avatar: avatar ?? defaultAvatar(trimmed),
       role,
       seat: firstFreeSeat(record.room.players),
       ready: false,
@@ -226,8 +233,8 @@ export class RoomManager {
     if (record) record.lastActiveAt = Date.now();
   }
 
-  /** 清理长时间无人的房间（保留时间要长于掉线重连宽限期） */
-  sweepEmpty(maxIdleMs = 120_000): void {
+  /** 清理长时间无人的房间（保留一点重连宽限，但不让幽灵房间留在列表里） */
+  sweepEmpty(maxIdleMs = 30_000): void {
     const now = Date.now();
     for (const [code, record] of this.rooms) {
       const hasConnected = record.room.players.some((p) => p.connected);
