@@ -30,6 +30,13 @@ function clearBoard(ctx: CanvasRenderingContext2D) {
   ctx.fillRect(0, 0, W, H);
 }
 
+function formatTime(ms: number): string {
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m${Math.round(seconds % 60)}s`;
+}
+
 function paintLine(
   ctx: CanvasRenderingContext2D,
   from: DrawPoint,
@@ -241,6 +248,22 @@ export function DrawGameView() {
   const [color, setColor] = useState(COLORS[0]);
   const [width, setWidth] = useState(WIDTHS[1]);
   const [clearKey, setClearKey] = useState(0);
+  const [keyboardInset, setKeyboardInset] = useState(0);
+  const [inputFocused, setInputFocused] = useState(false);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const update = () => {
+      setKeyboardInset(Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop));
+    };
+    viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
+    return () => {
+      viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
+    };
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now() + state.serverOffset), 200);
@@ -258,7 +281,7 @@ export function DrawGameView() {
   const isDrawer = game.drawerId === you.id;
   const remaining = Math.max(0, game.deadline - now);
   const seconds = Math.ceil(remaining / 1000);
-  const scores = [...game.scores].sort((a, b) => b.score - a.score);
+  const scores = [...game.scores].sort((a, b) => b.score - a.score || a.timeMs - b.timeMs);
 
   function sendStroke(strokeId: string, points: DrawPoint[], start: boolean) {
     store.gameAction({ type: "stroke", strokeId, points, color, width, start });
@@ -380,6 +403,11 @@ export function DrawGameView() {
         {!isHost && !isDrawer && game.phase === "draw" && (
           <form
             className="draw-guess"
+            style={
+              inputFocused && keyboardInset > 0
+                ? { transform: `translateY(-${keyboardInset}px)` }
+                : undefined
+            }
             onSubmit={(event) => {
               event.preventDefault();
               submitGuess();
@@ -390,12 +418,29 @@ export function DrawGameView() {
               value={guess}
               maxLength={24}
               placeholder="输入你猜的词"
+              enterKeyHint="send"
               onChange={(event) => setGuess(event.target.value)}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
             />
             <button className="btn btn-primary" type="submit" disabled={!guess.trim()}>
               猜
             </button>
           </form>
+        )}
+
+        {game.guesses.length > 0 && (
+          <div className="draw-guesses">
+            {game.guesses.slice(-6).map((item, index) => (
+              <span
+                key={`${item.name}-${index}`}
+                className={`draw-guess-item${item.ok ? " ok" : ""}`}
+              >
+                <b>{item.name}</b>：{item.text}
+                {item.ok ? " ✓" : ""}
+              </span>
+            ))}
+          </div>
         )}
 
         <div className="draw-scores">
@@ -415,6 +460,7 @@ export function DrawGameView() {
               <AvatarBadge avatar={player.avatar} size={24} />
               <span className="draw-name">{player.name}</span>
               <b>{player.score}</b>
+              <span className="draw-time">{formatTime(player.timeMs)}</span>
             </div>
           ))}
         </div>
@@ -422,6 +468,7 @@ export function DrawGameView() {
         {game.phase === "ended" && (
           <div className="draw-ended">
             <p>🏆 {scores[0]?.name ?? "本局结束"} 获胜</p>
+            <p className="draw-tiebreak">同分时按累计用时少者优先</p>
             {isHost ? (
               <div className="winner-actions">
                 <button className="btn btn-primary btn-block" onClick={() => store.startGame()}>

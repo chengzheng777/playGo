@@ -7,6 +7,7 @@ import {
   type ChatMessage,
   type ClientMessage,
   type ColorAction,
+  type DrawSettings,
   type ErrorCode,
   type GameAction,
   isRoomCode,
@@ -72,10 +73,18 @@ const chatSchema = z.object({ text: z.string().trim().min(1).max(MAX_CHAT_LEN) }
 const pingSchema = z.object({ t: z.number() });
 const selectGameSchema = z.object({ gameId: z.string().trim().min(1).max(32) });
 const settingsSchema = z.object({
-  settings: z.object({
-    targetScore: z.number().int().min(3).max(20),
-    roundSeconds: z.number().int().min(15).max(180),
-  }),
+  settings: z
+    .object({
+      targetScore: z.number().int().min(3).max(20),
+      roundSeconds: z.number().int().min(15).max(180),
+    })
+    .optional(),
+  draw: z
+    .object({
+      roundsPerPlayer: z.number().int().min(1).max(3),
+      roundSeconds: z.number().int().min(30).max(180),
+    })
+    .optional(),
 });
 const gameActionSchema = z.object({
   action: z.discriminatedUnion("type", [
@@ -308,7 +317,7 @@ export class Hub {
       case "game.select":
         return void this.selectGame(conn, parsed.msg.data.gameId);
       case "game.settings":
-        return void this.setSettings(conn, parsed.msg.data.settings);
+        return void this.setSettings(conn, parsed.msg.data);
       case "game.start":
         return void this.startGame(conn);
       case "game.action":
@@ -476,7 +485,7 @@ export class Hub {
     this.broadcast(record.room.code);
   }
 
-  private setSettings(conn: Conn, settings: YiyuSettings): void {
+  private setSettings(conn: Conn, data: { settings?: YiyuSettings; draw?: DrawSettings }): void {
     const record = this.roomOf(conn);
     if (!record) {
       this.replyError(conn, "ROOM_NOT_FOUND", "房间已失效，请重新创建");
@@ -487,7 +496,8 @@ export class Hub {
       this.replyError(conn, "BAD_PHASE", "开局后不能再改规则");
       return;
     }
-    this.rooms.setSettings(record.room.code, settings);
+    if (data.settings) this.rooms.setSettings(record.room.code, data.settings);
+    if (data.draw) this.rooms.setDrawSettings(record.room.code, data.draw);
     this.broadcast(record.room.code);
   }
 
@@ -499,7 +509,12 @@ export class Hub {
     }
     if (!this.isHost(conn, record)) return;
 
-    if (record.room.phase === "playing") {
+    const ended =
+      record.game?.phase === "ended" ||
+      record.uno?.phase === "ended" ||
+      record.color?.phase === "ended" ||
+      record.draw?.phase === "ended";
+    if (record.room.phase === "playing" && !ended) {
       this.replyError(conn, "BAD_PHASE", "游戏已经开始了");
       return;
     }
@@ -516,7 +531,7 @@ export class Hub {
       return;
     }
     const notReady = connected.filter((player) => !player.ready);
-    if (notReady.length > 0) {
+    if (!ended && notReady.length > 0) {
       this.replyError(conn, "BAD_PHASE", `还有 ${notReady.length} 人没准备`);
       return;
     }
@@ -542,7 +557,7 @@ export class Hub {
     } else if (record.gameId === "draw") {
       record.draw = new DrawGame(
         record.room.players,
-        { hostId: record.room.hostId, roundSeconds: 80, roundsPerPlayer: 1 },
+        { hostId: record.room.hostId, ...record.drawSettings },
         Date.now(),
       );
       record.game = null;
@@ -692,6 +707,7 @@ export class Hub {
         serverTime: Date.now(),
         gameId: record.gameId,
         settings: { ...record.settings },
+        drawSettings: { ...record.drawSettings },
         game: record.game?.viewFor(player.id) ?? null,
         uno: record.uno?.viewFor(player.id) ?? null,
         color: record.color?.viewFor(player.id) ?? null,

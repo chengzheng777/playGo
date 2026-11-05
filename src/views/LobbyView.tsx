@@ -21,7 +21,7 @@ const TIME_OPTIONS = [30, 45, 60, 90];
 
 export function LobbyView() {
   const state = useAppState();
-  const { room, you, settings } = state;
+  const { room, you, settings, drawSettings } = state;
   const [avatarOpen, setAvatarOpen] = useState(false);
 
   if (!room || !you) {
@@ -204,6 +204,51 @@ export function LobbyView() {
                       type="button"
                       className={settings.roundSeconds === value ? "on" : ""}
                       onClick={() => store.updateSettings({ ...settings, roundSeconds: value })}
+                    >
+                      {value}s
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {isHost && selected === "draw" && (
+            <section className="panel settings-panel">
+              <div className="panel-head">
+                <h2>规则</h2>
+                <span className="count">下一局生效</span>
+              </div>
+
+              <div className="setting-row">
+                <span className="label">每人轮数</span>
+                <div className="segmented">
+                  {[1, 2, 3].map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={drawSettings.roundsPerPlayer === value ? "on" : ""}
+                      onClick={() =>
+                        store.updateDrawSettings({ ...drawSettings, roundsPerPlayer: value })
+                      }
+                    >
+                      {value} 轮
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="setting-row">
+                <span className="label">每轮时间</span>
+                <div className="segmented">
+                  {[60, 80, 100, 120].map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={drawSettings.roundSeconds === value ? "on" : ""}
+                      onClick={() =>
+                        store.updateDrawSettings({ ...drawSettings, roundSeconds: value })
+                      }
                     >
                       {value}s
                     </button>

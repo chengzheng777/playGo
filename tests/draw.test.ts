@@ -102,16 +102,50 @@ describe("你画我猜", () => {
     const guesser = participants.find((player) => player.id !== drawer)!;
     const word = game.viewFor(drawer).word!;
 
-    expect(game.guess(guesser.id, "完全不对", 1000)).toBe(false);
+    expect(game.guess(guesser.id, "完全不对", 1000)).toBe(true);
     expect(game.guess(drawer, word, 1000)).toBe(false);
+    expect(game.viewFor(HOST_ID).guesses).toHaveLength(1);
+    expect(game.viewFor(HOST_ID).guesses[0]?.ok).toBe(false);
+
     expect(game.guess(guesser.id, word, 1000)).toBe(true);
 
     const revealed = game.viewFor(HOST_ID);
     expect(revealed.phase).toBe("reveal");
     expect(revealed.result?.guesserName).toBe(guesser.name);
     expect(revealed.word).toBe(word);
-    expect(revealed.scores.find((item) => item.id === guesser.id)?.score).toBe(10);
+    // 60 秒轮次，剩 59 秒：10 + floor(59/10) = 15
+    expect(revealed.result?.points).toBe(15);
+    expect(revealed.scores.find((item) => item.id === guesser.id)?.score).toBe(15);
     expect(revealed.scores.find((item) => item.id === drawer)?.score).toBe(5);
+    expect(revealed.scores.find((item) => item.id === guesser.id)?.timeMs).toBe(1000);
+  });
+
+  it("同分时累计用时少的获胜", () => {
+    const game = new DrawGame(
+      participants.slice(0, 2),
+      { hostId: HOST_ID, roundSeconds: 60, roundsPerPlayer: 1 },
+      0,
+    );
+
+    const first = game.viewFor(HOST_ID);
+    const drawer1 = first.drawerId;
+    const guesser1 = participants.find((player) => player.id !== drawer1)!;
+    const word1 = game.viewFor(drawer1).word!;
+    expect(game.guess(guesser1.id, word1, 5000)).toBe(true);
+
+    game.tick(first.deadline + 4500);
+
+    const second = game.viewFor(HOST_ID);
+    expect(second.round).toBe(2);
+    const drawer2 = second.drawerId;
+    const guesser2 = participants.find((player) => player.id !== drawer2)!;
+    const word2 = game.viewFor(drawer2).word!;
+    expect(game.guess(guesser2.id, word2, second.deadline - 57_000)).toBe(true);
+
+    game.tick(second.deadline + 4500);
+    const ended = game.viewFor(HOST_ID);
+    expect(ended.phase).toBe("ended");
+    expect(game.winnerId).toBe(guesser2.id);
   });
 
   it("超时进入揭晓，轮次走完会结束", () => {

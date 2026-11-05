@@ -3023,3 +3023,114 @@ select {
   font-weight: 800;
   color: #7dd3fc;
 }
+
+/* 你画我猜：高度自适应、横屏与键盘 */
+.draw-game {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.draw-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.draw-stage {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.draw-canvas {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.draw-guess {
+  position: relative;
+  z-index: 5;
+  transition: transform 0.18s ease;
+}
+
+.draw-guesses {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 0;
+  scrollbar-width: none;
+}
+
+.draw-guesses::-webkit-scrollbar {
+  display: none;
+}
+
+.draw-guess-item {
+  flex: 0 0 auto;
+  max-width: 220px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: word-in 0.18s ease-out;
+}
+
+.draw-guess-item b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.draw-guess-item.ok {
+  border-color: rgba(74, 222, 128, 0.45);
+  color: #4ade80;
+}
+
+.draw-player .draw-time {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.draw-tiebreak {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+@media (max-height: 620px) {
+  .draw-main {
+    gap: 8px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .draw-head {
+    min-height: 28px;
+  }
+
+  .draw-word {
+    font-size: 14px;
+  }
+
+  .draw-swatches {
+    gap: 6px;
+  }
+
+  .draw-swatch {
+    width: 28px;
+    height: 28px;
+  }
+}

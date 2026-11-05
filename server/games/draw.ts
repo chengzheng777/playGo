@@ -1,4 +1,11 @@
-import type { DrawAction, DrawPoint, DrawStroke, DrawView, Player } from "../../shared/protocol";
+import type {
+  DrawAction,
+  DrawGuessView,
+  DrawPoint,
+  DrawStroke,
+  DrawView,
+  Player,
+} from "../../shared/protocol";
 import { DRAW_WORDS } from "./draw-words";
 
 export interface DrawOptions {
@@ -21,6 +28,7 @@ interface Entry {
   avatar: Player["avatar"];
   connected: boolean;
   score: number;
+  timeMs: number;
 }
 
 const MAX_POINTS = 6000;
@@ -53,6 +61,8 @@ export class DrawGame {
   private eventSeq = 0;
   private lastEvent: { id: number; text: string } | null = null;
   private readonly used = new Set<string>();
+  private startedAt = 0;
+  private guesses: DrawGuessView[] = [];
 
   constructor(players: Player[], options: DrawOptions, now: number) {
     this.roundMs = (options.roundSeconds ?? 80) * 1000;
@@ -67,6 +77,7 @@ export class DrawGame {
           avatar: { ...player.avatar },
           connected: player.connected,
           score: 0,
+          timeMs: 0,
         });
       });
 
@@ -135,21 +146,34 @@ export class DrawGame {
     if (playerId === this.drawerId) return false;
     const player = this.players.find((item) => item.id === playerId);
     if (!player) return false;
-    if (normalize(text) !== normalize(this.word)) return false;
+
+    const answer = normalize(text) === normalize(this.word);
+    this.guesses.push({ name: player.name, text: text.slice(0, 24), ok: answer });
+    if (this.guesses.length > 8) this.guesses.shift();
+
+    if (!answer) return true;
 
     const drawer = this.players.find((item) => item.id === this.drawerId);
-    player.score += 10;
+    const elapsed = Math.max(0, now - this.startedAt);
+    const speedBonus = Math.min(8, Math.floor(Math.max(0, this.deadline - now) / 10_000));
+    const points = 10 + speedBonus;
+
+    for (const item of this.players) {
+      item.timeMs += item.id === player.id ? elapsed : this.roundMs;
+    }
+    player.score += points;
     if (drawer) drawer.score += 5;
 
-    this.result = { word: this.word, guesserName: player.name, points: 10 };
+    this.result = { word: this.word, guesserName: player.name, points };
     this.phase = "reveal";
     this.revealUntil = now + 4500;
-    this.emit(`${player.name} 猜对了，答案是「${this.word}」`);
+    this.emit(`${player.name} 猜对了（+${points}），答案是「${this.word}」`);
     return true;
   }
 
   tick(now: number): boolean {
     if (this.phase === "draw" && now >= this.deadline) {
+      for (const item of this.players) item.timeMs += this.roundMs;
       this.result = { word: this.word };
       this.phase = "reveal";
       this.revealUntil = now + 4500;
@@ -185,6 +209,7 @@ export class DrawGame {
         name: player.name,
         avatar: { ...player.avatar },
         score: player.score,
+        timeMs: player.timeMs,
         connected: player.connected,
         isDrawer: player.id === this.drawerId,
       })),
@@ -192,6 +217,7 @@ export class DrawGame {
         ...stroke,
         points: stroke.points.map((point) => ({ ...point })),
       })),
+      guesses: this.guesses.map((guess) => ({ ...guess })),
       result: this.phase === "draw" ? undefined : this.result,
       lastEvent: this.lastEvent,
     };
@@ -210,15 +236,18 @@ export class DrawGame {
 
     this.strokes.length = 0;
     this.pointCount = 0;
+    this.guesses = [];
     this.result = undefined;
     this.phase = "draw";
+    this.startedAt = now;
     this.deadline = now + this.roundMs;
     this.emit(`第 ${this.round} 轮：${this.drawerName} 来画`);
   }
 
   private finish(): void {
     this.phase = "ended";
-    const best = [...this.players].sort((a, b) => b.score - a.score)[0];
+    // 同分时用时少的获胜
+    const best = [...this.players].sort((a, b) => b.score - a.score || a.timeMs - b.timeMs)[0];
     this.winnerId = best?.id;
     this.emit(best ? `${best.name} 获胜！` : "本局结束");
   }

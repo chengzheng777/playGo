@@ -370,13 +370,14 @@ interface DrawView {
   gameId: "draw";
   phase: "draw" | "reveal" | "ended";
   round: number;
-  totalRounds: number; // = 参赛人数
+  totalRounds: number; // = 参赛人数 × 每人轮数
   drawerId: string;
   drawerName: string;
   deadline: number;
   word?: string; // 作画时只给画手；揭晓后所有人可见
-  scores: { id; name; avatar; score; connected; isDrawer }[];
+  scores: { id; name; avatar; score; timeMs; connected; isDrawer }[];
   strokes: DrawStroke[]; // 发给所有人，用于首次进入 / 重连重绘
+  guesses: { name; text; ok }[]; // 最近 8 条猜词，所有人可见
   result?: { word; guesserName?; points? };
   lastEvent: { id; text } | null;
 }
@@ -401,4 +402,14 @@ interface DrawStroke {
 - `stroke` / `clear` 仅当前画手有效；坐标、颜色、线宽、点数都会校验。
 - 服务端把笔迹以 `draw.delta` / `draw.clear` 广播给房间内所有人，大屏和猜词手机都能实时看到。
 - 首次进入或重连时通过 `room.state.draw.strokes` 全量重绘。
-- 猜对：猜的人 +10、画手 +5，立即进入揭晓；大屏在作画阶段拿不到 `word`。
+- 每次 `guess`（对错都算）都会广播新的 `room.state`，`draw.guesses` 里能看到所有人的猜测。
+- 猜对：猜的人得 `10 + 剩余秒数/10`（最多 +8）、画手 +5，立即进入揭晓；大屏在作画阶段拿不到 `word`。
+- 同分时按 `scores[].timeMs` 从小到大排名；房主可在结束后直接发 `game.start` 重开，无需重新准备。
+
+规则设置（`game.settings`，仅大厅阶段、仅房主）：
+
+```jsonc
+{ "draw": { "roundsPerPlayer": 2, "roundSeconds": 80 } }
+```
+
+`room.state.drawSettings` 会同步给所有人。

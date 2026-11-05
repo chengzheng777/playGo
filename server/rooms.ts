@@ -1,7 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { defaultAvatar } from "../shared/avatars";
 import {
+  DEFAULT_DRAW_SETTINGS,
   DEFAULT_SETTINGS,
+  type DrawSettings,
   MAX_PLAYERS,
   type Player,
   ROOM_CODE_ALPHABET,
@@ -26,6 +28,7 @@ export interface RoomRecord {
   gameId: string | null;
   /** 房主配置的规则 */
   settings: YiyuSettings;
+  drawSettings: DrawSettings;
   /** 进行中的游戏实例 */
   game: YiyuGame | null;
   uno: UnoGame | null;
@@ -122,6 +125,7 @@ export class RoomManager {
       lastActiveAt: Date.now(),
       gameId,
       settings: { ...DEFAULT_SETTINGS },
+      drawSettings: { ...DEFAULT_DRAW_SETTINGS },
       game: null,
       uno: null,
       color: null,
@@ -223,6 +227,18 @@ export class RoomManager {
     const record = this.rooms.get(code);
     if (!record) return false;
     record.settings = { ...settings };
+    record.version += 1;
+    record.lastActiveAt = Date.now();
+    return true;
+  }
+
+  setDrawSettings(code: string, settings: DrawSettings): boolean {
+    const record = this.rooms.get(code);
+    if (!record) return false;
+    record.drawSettings = {
+      roundsPerPlayer: Math.min(3, Math.max(1, settings.roundsPerPlayer)),
+      roundSeconds: Math.min(180, Math.max(30, settings.roundSeconds)),
+    };
     record.version += 1;
     record.lastActiveAt = Date.now();
     return true;

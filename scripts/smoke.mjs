@@ -385,10 +385,15 @@ async function main() {
 
   host.send("game.select", { gameId: "draw" });
   await host.next((m) => m.type === "room.state" && m.data.gameId === "draw");
+  host.send("game.settings", { draw: { roundsPerPlayer: 2, roundSeconds: 60 } });
+  const drawSettingsState = await host.next(
+    (m) => m.type === "room.state" && m.data.drawSettings?.roundsPerPlayer === 2,
+  );
+  check("你画我猜规则可设置", drawSettingsState?.data.drawSettings.roundSeconds === 60);
   host.send("game.start", {});
 
   const drawHost = await host.next((m) => m.type === "room.state" && m.data.draw?.phase === "draw");
-  check("你画我猜开局", drawHost.data.draw.totalRounds === 2);
+  check("你画我猜开局", drawHost.data.draw.totalRounds === 4);
   check("大屏在画图阶段看不到词", drawHost.data.draw.word === undefined);
 
   const bobDraw = await guest2.next((m) => m.data.draw?.phase === "draw");
@@ -415,11 +420,22 @@ async function main() {
   check("笔迹实时转发给大屏", delta.data.points.length === 1);
 
   const drawWord = drawerEntry?.view.draw.word ?? "";
+  drawOther?.client.send("game.action", { action: { type: "guess", text: "完全不搭" } });
+  const drawWrong = await host.next(
+    (m) => m.type === "room.state" && (m.data.draw?.guesses?.length ?? 0) > 0,
+  );
+  check("猜错也会同步给所有人", drawWrong.data.draw.guesses[0]?.ok === false);
+
   drawOther?.client.send("game.action", { action: { type: "guess", text: drawWord } });
   const drawReveal = await host.next(
     (m) => m.type === "room.state" && m.data.draw?.phase === "reveal",
   );
   check("猜对后揭晓答案", drawReveal.data.draw.result?.word === drawWord);
+  check(
+    "得分带上速度加成与用时",
+    (drawReveal.data.draw.result?.points ?? 0) >= 10 &&
+      (drawReveal.data.draw.scores[0]?.timeMs ?? 0) >= 0,
+  );
 
   host.close();
   guest2.close();

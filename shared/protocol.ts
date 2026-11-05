@@ -71,6 +71,7 @@ export interface RoomStatePayload {
   serverTime: number;
   gameId: string | null;
   settings: YiyuSettings;
+  drawSettings: DrawSettings;
   game: YiyuView | null;
   uno: UnoView | null;
   color: ColorView | null;
@@ -86,6 +87,16 @@ export interface YiyuSettings {
 }
 
 export const DEFAULT_SETTINGS: YiyuSettings = { targetScore: 8, roundSeconds: 60 };
+
+/** 你画我猜的房间规则 */
+export interface DrawSettings {
+  /** 每人画几轮 */
+  roundsPerPlayer: number;
+  /** 每轮多少秒 */
+  roundSeconds: number;
+}
+
+export const DEFAULT_DRAW_SETTINGS: DrawSettings = { roundsPerPlayer: 1, roundSeconds: 80 };
 
 export type YiyuMode = "talk" | "act" | "lip" | "rush";
 export type YiyuTeamId = "A" | "B";
@@ -204,8 +215,16 @@ export interface DrawPlayerView {
   name: string;
   avatar: Avatar;
   score: number;
+  /** 累计猜词用时（毫秒），同分时用时少的获胜 */
+  timeMs: number;
   connected: boolean;
   isDrawer: boolean;
+}
+
+export interface DrawGuessView {
+  name: string;
+  text: string;
+  ok: boolean;
 }
 
 export interface DrawView {
@@ -219,6 +238,7 @@ export interface DrawView {
   word?: string;
   scores: DrawPlayerView[];
   strokes: DrawStroke[];
+  guesses: DrawGuessView[];
   result?: { word: string; guesserName?: string; points?: number };
   lastEvent: { id: number; text: string } | null;
 }
@@ -310,7 +330,10 @@ export type ClientMessage =
   | (Envelope & { type: "player.update"; data: { name?: string; avatar?: Avatar } })
   | (Envelope & { type: "chat.send"; data: { text: string } })
   | (Envelope & { type: "game.select"; data: { gameId: string } })
-  | (Envelope & { type: "game.settings"; data: { settings: YiyuSettings } })
+  | (Envelope & {
+      type: "game.settings";
+      data: { settings?: YiyuSettings; draw?: DrawSettings };
+    })
   | (Envelope & { type: "game.start"; data: Record<string, never> })
   | (Envelope & { type: "game.action"; data: { action: GameAction } })
   | (Envelope & { type: "game.back"; data: Record<string, never> })
