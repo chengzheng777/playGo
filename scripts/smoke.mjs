@@ -372,6 +372,55 @@ async function main() {
     shot.data.color.players.some((p) => p.submitted),
   );
 
+  // ---- 你画我猜 ----
+  console.log("\n你画我猜");
+  host.send("game.back", {});
+  await host.next((m) => m.type === "room.state" && m.data.room.phase === "lobby");
+
+  guest2.send("player.ready", { ready: true });
+  carol.send("player.ready", { ready: true });
+  await host.next(
+    (m) => m.type === "room.state" && m.data.room.players.filter((p) => p.ready).length >= 2,
+  );
+
+  host.send("game.select", { gameId: "draw" });
+  await host.next((m) => m.type === "room.state" && m.data.gameId === "draw");
+  host.send("game.start", {});
+
+  const drawHost = await host.next((m) => m.type === "room.state" && m.data.draw?.phase === "draw");
+  check("你画我猜开局", drawHost.data.draw.totalRounds === 2);
+  check("大屏在画图阶段看不到词", drawHost.data.draw.word === undefined);
+
+  const bobDraw = await guest2.next((m) => m.data.draw?.phase === "draw");
+  const carolDraw = await carol.next((m) => m.data.draw?.phase === "draw");
+  const entries = [
+    { client: guest2, view: bobDraw.data },
+    { client: carol, view: carolDraw.data },
+  ];
+  const drawerEntry = entries.find((entry) => entry.view.draw.drawerId === entry.view.you.id);
+  const drawOther = entries.find((entry) => entry !== drawerEntry);
+  check("画手能看到词", typeof drawerEntry?.view.draw.word === "string");
+
+  drawerEntry?.client.send("game.action", {
+    action: {
+      type: "stroke",
+      strokeId: "s1",
+      points: [{ x: 0.5, y: 0.5 }],
+      color: "#111827",
+      width: 6,
+      start: true,
+    },
+  });
+  const delta = await host.next((m) => m.type === "draw.delta");
+  check("笔迹实时转发给大屏", delta.data.points.length === 1);
+
+  const drawWord = drawerEntry?.view.draw.word ?? "";
+  drawOther?.client.send("game.action", { action: { type: "guess", text: drawWord } });
+  const drawReveal = await host.next(
+    (m) => m.type === "room.state" && m.data.draw?.phase === "reveal",
+  );
+  check("猜对后揭晓答案", drawReveal.data.draw.result?.word === drawWord);
+
   host.close();
   guest2.close();
   carol.close();

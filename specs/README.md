@@ -24,3 +24,4 @@
 | 002  | 一愚惊人         | active |
 | 003  | 一起 UNO         | active |
 | 004  | 拍颜色           | active |
+| 005  | 你画我猜         | active |

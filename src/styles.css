@@ -2770,3 +2770,256 @@ select {
   padding: 22px;
   gap: 24px;
 }
+
+/* ============================================================
+   你画我猜
+   ============================================================ */
+
+.draw-game {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(900px 520px at 50% -12%, rgba(56, 189, 248, 0.16), transparent 66%), var(--bg);
+}
+
+.draw-round {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.draw-main {
+  flex: 1;
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 14px 16px calc(22px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.draw-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.draw-who {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.draw-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.draw-who b {
+  font-size: 20px;
+}
+
+.draw-timer {
+  margin-left: auto;
+  font-size: 26px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #7dd3fc;
+}
+
+.draw-timer.urgent {
+  color: #ff6b6b;
+  animation: timer-pulse 1s ease-in-out infinite;
+}
+
+.draw-answer {
+  margin-left: auto;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.draw-answer b {
+  color: var(--accent);
+  font-size: 18px;
+}
+
+.draw-stage {
+  position: relative;
+  width: 100%;
+  border-radius: 18px;
+  padding: 10px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+}
+
+.draw-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border-radius: 10px;
+  background: #fff;
+  touch-action: none;
+}
+
+.draw-pad {
+  cursor: crosshair;
+}
+
+.draw-waiting {
+  position: absolute;
+  inset: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 10px;
+  background: rgba(248, 250, 252, 0.94);
+  color: #334155;
+}
+
+.draw-waiting-emoji {
+  font-size: 40px;
+}
+
+.draw-word {
+  text-align: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: #7dd3fc;
+}
+
+.draw-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.draw-swatches {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.draw-swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.draw-swatch.on {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+.draw-widths {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.draw-width {
+  width: 40px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  padding: 0;
+}
+
+.draw-width i {
+  display: block;
+  border-radius: 50%;
+  background: #e2e8f0;
+}
+
+.draw-width.on {
+  border-color: #7dd3fc;
+  background: rgba(125, 211, 252, 0.12);
+}
+
+.draw-guess {
+  display: flex;
+  gap: 8px;
+}
+
+.draw-guess .input {
+  flex: 1;
+  height: 48px;
+}
+
+.draw-guess .btn {
+  height: 48px;
+}
+
+.draw-scores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.draw-player {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.draw-player.drawer {
+  border-color: rgba(125, 211, 252, 0.5);
+  color: var(--text);
+}
+
+.draw-player.me {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.draw-player.offline {
+  opacity: 0.45;
+}
+
+.draw-player b {
+  color: #7dd3fc;
+  font-variant-numeric: tabular-nums;
+}
+
+.draw-rank {
+  width: 14px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.draw-name {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draw-ended {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.draw-ended p {
+  font-size: 20px;
+  font-weight: 800;
+  color: #7dd3fc;
+}

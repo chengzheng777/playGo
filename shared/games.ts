@@ -38,10 +38,10 @@ export const GAME_CATALOG: readonly GameMeta[] = [
     id: "draw",
     name: "你画我猜",
     tagline: "画得越烂，猜得越欢",
-    players: "2–8 人",
+    players: "2–8 人 · 画板",
     emoji: "🖌️",
     accent: "#38bdf8",
-    available: false,
+    available: true,
   },
   {
     id: "undercover",

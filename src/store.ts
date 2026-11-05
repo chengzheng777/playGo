@@ -5,6 +5,8 @@ import type {
   ChatMessage,
   ClientMessage,
   ColorView,
+  DrawPoint,
+  DrawView,
   ErrorCode,
   GameAction,
   Player,
@@ -29,6 +31,19 @@ export interface Profile {
   avatar: Avatar;
 }
 
+/** 大屏收到的实时笔迹增量 */
+export type DrawEvent =
+  | {
+      seq: number;
+      kind: "delta";
+      strokeId: string;
+      points: DrawPoint[];
+      color: string;
+      width: number;
+      start: boolean;
+    }
+  | { seq: number; kind: "clear" };
+
 export interface AppState {
   view: View;
   joinCode: string;
@@ -46,6 +61,8 @@ export interface AppState {
   game: YiyuView | null;
   uno: UnoView | null;
   color: ColorView | null;
+  draw: DrawView | null;
+  drawEvent: DrawEvent | null;
   /** 服务端时间 - 本地时间，用于倒计时校准 */
   serverOffset: number;
 }
@@ -120,6 +137,8 @@ class Store {
       game: null,
       uno: null,
       color: null,
+      draw: null,
+      drawEvent: null,
       serverOffset: 0,
     };
 
@@ -300,6 +319,8 @@ class Store {
       game: null,
       uno: null,
       color: null,
+      draw: null,
+      drawEvent: null,
     });
     history.replaceState(null, "", "/");
   }
@@ -449,13 +470,15 @@ class Store {
           game: null,
           uno: null,
           color: null,
+          draw: null,
+          drawEvent: null,
         });
         history.replaceState(null, "", `/r/${room.code}`);
         return;
       }
 
       case "room.state": {
-        const { room, you, version, token, gameId, settings, game, uno, color, serverTime } =
+        const { room, you, version, token, gameId, settings, game, uno, color, draw, serverTime } =
           message.data;
         this.applySession(room.code, token);
         const wasLobby = this.state.view === "lobby";
@@ -471,6 +494,8 @@ class Store {
           game,
           uno,
           color,
+          draw,
+          drawEvent: null,
           serverOffset: serverTime - Date.now(),
         });
         if (!wasLobby) history.replaceState(null, "", `/r/${room.code}`);
@@ -479,6 +504,18 @@ class Store {
 
       case "chat.message": {
         this.set({ chat: [...this.state.chat, message.data].slice(-MAX_CHAT_HISTORY) });
+        return;
+      }
+
+      case "draw.delta": {
+        const seq = (this.state.drawEvent?.seq ?? 0) + 1;
+        this.set({ drawEvent: { seq, kind: "delta", ...message.data } });
+        return;
+      }
+
+      case "draw.clear": {
+        const seq = (this.state.drawEvent?.seq ?? 0) + 1;
+        this.set({ drawEvent: { seq, kind: "clear" } });
         return;
       }
 
@@ -521,6 +558,8 @@ class Store {
         game: null,
         uno: null,
         color: null,
+        draw: null,
+        drawEvent: null,
       });
       history.replaceState(null, "", "/");
       return;

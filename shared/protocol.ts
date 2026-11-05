@@ -74,6 +74,7 @@ export interface RoomStatePayload {
   game: YiyuView | null;
   uno: UnoView | null;
   color: ColorView | null;
+  draw: DrawView | null;
 }
 
 /** 房主可改的规则，开局时生效 */
@@ -186,6 +187,53 @@ export type UnoAction =
   | { type: "draw" }
   | { type: "pass" };
 
+export interface DrawPoint {
+  x: number;
+  y: number;
+}
+
+export interface DrawStroke {
+  id: string;
+  color: string;
+  width: number;
+  points: DrawPoint[];
+}
+
+export interface DrawPlayerView {
+  id: string;
+  name: string;
+  avatar: Avatar;
+  score: number;
+  connected: boolean;
+  isDrawer: boolean;
+}
+
+export interface DrawView {
+  gameId: "draw";
+  phase: "draw" | "reveal" | "ended";
+  round: number;
+  totalRounds: number;
+  drawerId: string;
+  drawerName: string;
+  deadline: number;
+  word?: string;
+  scores: DrawPlayerView[];
+  strokes: DrawStroke[];
+  result?: { word: string; guesserName?: string; points?: number };
+  lastEvent: { id: number; text: string } | null;
+}
+
+export type DrawAction =
+  | {
+      type: "stroke";
+      strokeId: string;
+      points: DrawPoint[];
+      color: string;
+      width: number;
+      start: boolean;
+    }
+  | { type: "clear" };
+
 export interface ColorTarget {
   hex: string;
   name: string;
@@ -228,7 +276,7 @@ export type ColorAction = {
   photo: string;
 };
 
-export type GameAction = YiyuAction | UnoAction | ColorAction;
+export type GameAction = YiyuAction | UnoAction | ColorAction | DrawAction;
 
 export type ErrorCode =
   | "PROTOCOL_ERROR"
@@ -277,6 +325,18 @@ export type ServerMessage =
   | { v: 1; type: "room.created"; data: { room: Room; you: Player; token: string } }
   | { v: 1; type: "room.state"; data: RoomStatePayload }
   | { v: 1; type: "chat.message"; data: ChatMessage }
+  | {
+      v: 1;
+      type: "draw.delta";
+      data: {
+        strokeId: string;
+        points: DrawPoint[];
+        color: string;
+        width: number;
+        start: boolean;
+      };
+    }
+  | { v: 1; type: "draw.clear"; data: Record<string, never> }
   | { v: 1; type: "pong"; data: { t: number; serverTime: number } }
   | { v: 1; type: "ack"; data: { id: string } }
   | { v: 1; type: "error"; data: { code: ErrorCode; message: string; fatal?: boolean } };

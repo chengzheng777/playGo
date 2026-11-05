@@ -358,3 +358,47 @@ interface ColorView {
 - 得分 = `max(0, 100 - ΔE)`，保留一位小数；排名只决定展示顺序，不按名次发固定分。
 - `photo` 只接受 `data:image/` 且不超过 320 KB；照片只在大屏的揭晓视图里下发。
 - 所有在线玩家都提交会提前揭晓，否则 40 秒到点揭晓；揭晓 9 秒后进入下一轮，3 轮结束。
+
+---
+
+## 12. 你画我猜
+
+房间选中 `draw` 时，`room.state.draw` 是 `DrawView`：
+
+```ts
+interface DrawView {
+  gameId: "draw";
+  phase: "draw" | "reveal" | "ended";
+  round: number;
+  totalRounds: number; // = 参赛人数
+  drawerId: string;
+  drawerName: string;
+  deadline: number;
+  word?: string; // 作画时只给画手；揭晓后所有人可见
+  scores: { id; name; avatar; score; connected; isDrawer }[];
+  strokes: DrawStroke[]; // 只发给大屏，用于重连重绘
+  result?: { word; guesserName?; points? };
+  lastEvent: { id; text } | null;
+}
+
+interface DrawStroke {
+  id: string;
+  color: string; // #rrggbb
+  width: number;
+  points: { x: number; y: number }[]; // 归一化 0–1
+}
+```
+
+动作（`game.action`）：
+
+```jsonc
+{ "type": "stroke", "strokeId": "s1", "points": [{ "x": 0.5, "y": 0.5 }],
+  "color": "#111827", "width": 6, "start": true }
+{ "type": "clear" }
+{ "type": "guess", "text": "灯泡" }
+```
+
+- `stroke` / `clear` 仅当前画手有效；坐标、颜色、线宽、点数都会校验。
+- 服务端把笔迹以 `draw.delta` 只转发给大屏（房主），`draw.clear` 同理；其他玩家收不到，省流量。
+- 大屏重连时通过 `room.state.draw.strokes` 全量重绘。
+- 猜对：猜的人 +10、画手 +5，立即进入揭晓；大屏在作画阶段拿不到 `word`。

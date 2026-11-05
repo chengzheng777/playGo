@@ -1,6 +1,7 @@
 import { Toast } from "./components/Toast";
 import { store, useAppState } from "./store";
 import { ColorGameView } from "./views/ColorView";
+import { DrawGameView } from "./views/DrawView";
 import { GameView } from "./views/GameView";
 import { HomeView } from "./views/HomeView";
 import { JoinView } from "./views/JoinView";
@@ -26,6 +27,8 @@ export function App() {
               <UnoGameView />
             ) : state.color ? (
               <ColorGameView />
+            ) : state.draw ? (
+              <DrawGameView />
             ) : (
               <LobbyView />
             ))}

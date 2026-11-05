@@ -12,6 +12,7 @@ import {
   type YiyuSettings,
 } from "../shared/protocol";
 import type { ColorGame } from "./games/color";
+import type { DrawGame } from "./games/draw";
 import type { UnoGame } from "./games/uno";
 import type { YiyuGame } from "./games/yiyu";
 
@@ -29,6 +30,7 @@ export interface RoomRecord {
   game: YiyuGame | null;
   uno: UnoGame | null;
   color: ColorGame | null;
+  draw: DrawGame | null;
 }
 
 export type JoinError = "ROOM_NOT_FOUND" | "ROOM_FULL" | "NAME_TAKEN" | "BAD_TOKEN" | "BAD_PHASE";
@@ -123,6 +125,7 @@ export class RoomManager {
       game: null,
       uno: null,
       color: null,
+      draw: null,
     };
     this.rooms.set(code, record);
     return { record, player, token };

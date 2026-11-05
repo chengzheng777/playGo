@@ -115,6 +115,12 @@ export function LobbyView() {
                   每轮随机一个颜色，玩家用手机拍一张照片，画面中心越接近目标色得分越高。共 3 轮。
                 </p>
               )}
+              {selected === "draw" && (
+                <p className="game-rule">
+                  轮流由一名玩家在手机上画，笔迹实时同步到大屏，其他人在手机上打字猜词。猜对的人
+                  +10，画的人 +5。
+                </p>
+              )}
             </section>
           ) : (
             <section className="panel current-game">
@@ -138,7 +144,9 @@ export function LobbyView() {
                       ? "每人 7 张牌，按颜色或数字出牌，先出完手牌获胜；大屏只负责观战，玩家在手机上出牌。"
                       : selected === "color"
                         ? "每轮随机一个颜色，拍一张照片，画面中心越接近目标色得分越高。"
-                        : "房主电脑会播放词语，你和其他手机玩家分队猜词，记得背对屏幕。"}
+                        : selected === "draw"
+                          ? "轮流画图，笔迹会同步到大屏，其他人打字猜。"
+                          : "房主电脑会播放词语，你和其他手机玩家分队猜词，记得背对屏幕。"}
                   </p>
 
                   <div className="cg-settings">

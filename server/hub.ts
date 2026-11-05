@@ -21,6 +21,7 @@ import {
   type YiyuSettings,
 } from "../shared/protocol";
 import { ColorGame } from "./games/color";
+import { DrawGame } from "./games/draw";
 import { UnoGame } from "./games/uno";
 import { YiyuGame } from "./games/yiyu";
 import type { RoomManager, RoomRecord } from "./rooms";
@@ -88,6 +89,18 @@ const gameActionSchema = z.object({
     }),
     z.object({ type: z.literal("draw") }),
     z.object({ type: z.literal("pass") }),
+    z.object({
+      type: z.literal("stroke"),
+      strokeId: z.string().min(1).max(24),
+      points: z
+        .array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) }))
+        .min(1)
+        .max(200),
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+      width: z.number().min(1).max(24),
+      start: z.boolean(),
+    }),
+    z.object({ type: z.literal("clear") }),
     z.object({
       type: z.literal("shoot"),
       rgb: z.object({
@@ -243,6 +256,7 @@ export class Hub {
       let changed = false;
       if (record.game?.tick(now)) changed = true;
       if (record.color?.tick(now)) changed = true;
+      if (record.draw?.tick(now)) changed = true;
       if (!changed) continue;
       record.version += 1;
       this.broadcast(record.room.code);
@@ -362,6 +376,7 @@ export class Hub {
     result.record.game?.setConnected(result.player.id, true);
     result.record.uno?.setConnected(result.player.id, true);
     result.record.color?.setConnected(result.player.id, true);
+    result.record.draw?.setConnected(result.player.id, true);
     this.send(conn, this.stateFor(result.record, result.player));
     this.broadcast(data.code);
   }
@@ -376,6 +391,7 @@ export class Hub {
     record?.game?.setConnected(playerId, false);
     record?.uno?.setConnected(playerId, false);
     record?.color?.setConnected(playerId, false);
+    record?.draw?.setConnected(playerId, false);
     this.rooms.removePlayer(roomCode, playerId);
     this.broadcast(roomCode);
   }
@@ -509,6 +525,7 @@ export class Hub {
       record.uno = new UnoGame(participants, Date.now());
       record.game = null;
       record.color = null;
+      record.draw = null;
     } else if (record.gameId === "color") {
       record.color = new ColorGame(
         record.room.players,
@@ -521,6 +538,16 @@ export class Hub {
       );
       record.game = null;
       record.uno = null;
+      record.draw = null;
+    } else if (record.gameId === "draw") {
+      record.draw = new DrawGame(
+        record.room.players,
+        { hostId: record.room.hostId, roundSeconds: 80, roundsPerPlayer: 1 },
+        Date.now(),
+      );
+      record.game = null;
+      record.uno = null;
+      record.color = null;
     } else {
       record.game = new YiyuGame(
         record.room.players,
@@ -529,6 +556,7 @@ export class Hub {
       );
       record.uno = null;
       record.color = null;
+      record.draw = null;
     }
     record.room.phase = "playing";
     record.version += 1;
@@ -547,6 +575,23 @@ export class Hub {
       changed = record.uno.action(conn.playerId, action as UnoAction, now);
     } else if (record.color) {
       changed = record.color.action(conn.playerId, action as ColorAction, now);
+    } else if (record.draw) {
+      if (action.type === "stroke") {
+        const delta = record.draw.stroke(conn.playerId, action);
+        if (delta) {
+          this.sendToHost(record.room.code, { v: 1, type: "draw.delta", data: delta });
+        }
+        return;
+      }
+      if (action.type === "clear") {
+        if (record.draw.clear(conn.playerId)) {
+          this.sendToHost(record.room.code, { v: 1, type: "draw.clear", data: {} });
+        }
+        return;
+      }
+      if (action.type === "guess") {
+        changed = record.draw.guess(conn.playerId, action.text, now);
+      }
     }
 
     if (changed) {
@@ -565,6 +610,7 @@ export class Hub {
     record.game = null;
     record.uno = null;
     record.color = null;
+    record.draw = null;
     for (const player of record.room.players) player.ready = false;
     record.version += 1;
     this.broadcast(record.room.code);
@@ -584,6 +630,7 @@ export class Hub {
     record.game?.setConnected(playerId, false);
     record.uno?.setConnected(playerId, false);
     record.color?.setConnected(playerId, false);
+    record.draw?.setConnected(playerId, false);
     record.version += 1;
     this.broadcast(roomCode);
     this.scheduleRemoval(roomCode, playerId);
@@ -648,8 +695,19 @@ export class Hub {
         game: record.game?.viewFor(player.id) ?? null,
         uno: record.uno?.viewFor(player.id) ?? null,
         color: record.color?.viewFor(player.id) ?? null,
+        draw: record.draw?.viewFor(player.id) ?? null,
       },
     };
+  }
+
+  private sendToHost(code: string, message: ServerMessage): void {
+    const record = this.rooms.get(code);
+    if (!record) return;
+    for (const conn of this.conns.values()) {
+      if (conn.roomCode === code && conn.playerId === record.room.hostId) {
+        this.send(conn, message);
+      }
+    }
   }
 
   private broadcast(code: string): void {
