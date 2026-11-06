@@ -31,13 +31,14 @@ pnpm dev
 pnpm package:win
 ```
 
-产出 `release/playGo-<版本>-win-x64.zip`（约 26 MB）。解压后双击 `playGo.cmd`：
+产出 `release/playGo-<版本>-win-x64.zip`（约 26 MB）。解压后双击 `playGo.exe`：
 
 - 自带 Node 运行时，目标电脑**不需要装 Node**
-- 自动在 8787–8797 里挑端口并打开浏览器
+- **没有命令行窗口**，自动打开一个干净的 Edge 应用窗口
+- 托盘图标：打开窗口 / 在浏览器中打开 / 退出
 - 手机连同一个 WiFi，扫码加入
 
-包内是 `runtime/node.exe` + `app/server.mjs`（服务端单文件）+ `app/dist`（前端产物）。
+包内是 `runtime/node.exe` + `app/server.mjs`（服务端单文件）+ `app/dist`（前端产物）+ `playGo.exe`（WinForms 启动器）。
 
 ### 桌面应用（Electron）
 
@@ -160,6 +161,7 @@ server/            本地服务：HTTP、静态资源、WebSocket、房间与游
   games/yiyu.ts    一愚惊人规则引擎（服务端权威，大屏不参赛）
   games/words.ts   词库（只放服务端）
   net.ts           局域网网卡枚举
+  firewall.ts      防火墙自检与一键放行
   qr.ts            二维码生成
 shared/            前后端共享
   protocol.ts      协议类型与常量
@@ -177,7 +179,15 @@ scripts/           冒烟测试
 ## 手机连不上？
 
 1. 确认手机连的是同一个 WiFi，不是 5G 蜂窝。
-2. Windows 防火墙允许 Node 访问「专用网络」。
+2. **Windows 防火墙放行这个程序**。规则按 exe 的完整路径匹配：开发时放行过系统 `node.exe`，打包版自带一个换了路径的 `node.exe`，等于新程序，入站请求会被整包丢掉（扫码后一直转圈）。三种放行方式任选：
+   - 便携包 / 应用包：右键「修复防火墙.cmd」→「以管理员身份运行」；
+   - 应用内：房间二维码下方会直接提示，点「一键放行」，在 UAC 弹窗选「是」；
+   - 手动（管理员 PowerShell）：
+
+     ```powershell
+     netsh advfirewall firewall add rule name="playGo 局域网访问" dir=in action=allow program="D:\playGo\runtime\node.exe" enable=yes profile=any
+     ```
+
 3. 路由器若开了「AP 隔离 / 访客网络」，设备之间互相不通，换手机热点。
 4. 二维码下方可以切换网卡；虚拟网卡（VPN、Docker、WSL）通常连不通。
 5. 端口 8787 被占用时会自动换成 8788…，以启动日志里的地址为准。

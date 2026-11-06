@@ -7,11 +7,34 @@ interface Networks {
   publicUrl?: string;
 }
 
+interface FirewallStatus {
+  applicable: boolean;
+  readable: boolean;
+  enabled: boolean | null;
+  allowed: boolean | null;
+  program: string;
+  rules: { profiles: string[] }[];
+  missingProfiles: string[];
+  command: string;
+}
+
+interface FixResult {
+  ok: boolean;
+  reason?: string;
+  status: FirewallStatus;
+}
+
 const KIND_LABEL: Record<string, string> = {
   wifi: "无线",
   ethernet: "有线",
   other: "网络",
   virtual: "虚拟网卡",
+};
+
+const PROFILE_LABEL: Record<string, string> = {
+  domain: "域",
+  private: "专用",
+  public: "公用",
 };
 
 const SHARE_KEY = "playgo:share";
@@ -51,6 +74,10 @@ export function QrCard({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
   const [mode, setMode] = useState<ShareMode>("lan");
   const [publicUrl, setPublicUrl] = useState("");
+  const [firewall, setFirewall] = useState<FirewallStatus | null>(null);
+  const [fixing, setFixing] = useState(false);
+  const [fixNote, setFixNote] = useState("");
+  const [copiedFix, setCopiedFix] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -77,6 +104,19 @@ export function QrCard({ code }: { code: string }) {
   }, []);
 
   useEffect(() => {
+    let alive = true;
+    fetch("/api/firewall")
+      .then((response) => response.json() as Promise<FirewallStatus>)
+      .then((data) => {
+        if (alive) setFirewall(data);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!networks) return;
     try {
       localStorage.setItem(SHARE_KEY, JSON.stringify({ mode, url: publicUrl }));
@@ -91,6 +131,16 @@ export function QrCard({ code }: { code: string }) {
   const lanUrl = ip ? `http://${ip}:${port}/j/${code}` : `${location.origin}/j/${code}`;
   const url = usePublic ? `${publicBase}/j/${code}` : lanUrl;
 
+  const programName = firewall?.program.split(/[\\/]/).pop() ?? "playGo";
+  const missingProfiles = firewall?.missingProfiles ?? [];
+  const needsFix =
+    firewall?.applicable === true &&
+    (firewall.allowed === false || (firewall.allowed === true && missingProfiles.length > 0));
+  const coveredLabel = ["domain", "private", "public"]
+    .filter((item) => !missingProfiles.includes(item))
+    .map((item) => PROFILE_LABEL[item] ?? item)
+    .join(" / ");
+
   async function copy() {
     try {
       await navigator.clipboard.writeText(url);
@@ -98,6 +148,37 @@ export function QrCard({ code }: { code: string }) {
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
       setCopied(false);
+    }
+  }
+
+  async function copyCommand() {
+    if (!firewall) return;
+    try {
+      await navigator.clipboard.writeText(firewall.command);
+      setCopiedFix(true);
+      window.setTimeout(() => setCopiedFix(false), 1500);
+    } catch {
+      setCopiedFix(false);
+    }
+  }
+
+  async function allowFirewall() {
+    setFixing(true);
+    setFixNote("");
+    try {
+      const response = await fetch("/api/firewall/open", { method: "POST" });
+      if (!response.ok) throw new Error(String(response.status));
+      const data = (await response.json()) as FixResult;
+      setFirewall(data.status);
+      setFixNote(
+        data.ok
+          ? "已放行，用手机重新扫码试试。"
+          : "没有放行成功：可能取消了系统授权，或这台电脑的策略不允许自动放行。可以复制下面的命令手动执行。",
+      );
+    } catch {
+      setFixNote("放行失败，请在管理员 PowerShell 里执行下面的命令。");
+    } finally {
+      setFixing(false);
     }
   }
 
@@ -180,6 +261,36 @@ export function QrCard({ code }: { code: string }) {
 
       {networks && networks.urls.length === 0 && (
         <p className="warn">没检测到局域网地址，先把电脑连上 WiFi 或网线。</p>
+      )}
+
+      {needsFix && firewall && !usePublic && (
+        <div className="fw-card">
+          <p className="fw-title">手机扫码连不上？</p>
+          <p className="fw-text">
+            {firewall.allowed
+              ? `防火墙只对「${coveredLabel}」网络放行，换成另一种网络手机就又连不上了。`
+              : `Windows 防火墙还没放行 ${programName}，手机发来的请求会被整包丢掉——不只是端口，是整个程序都没放行。`}
+          </p>
+          <div className="fw-actions">
+            <button
+              type="button"
+              className="btn btn-mini btn-primary"
+              onClick={allowFirewall}
+              disabled={fixing}
+            >
+              {fixing ? "等待授权…" : "一键放行"}
+            </button>
+            <button type="button" className="btn btn-mini" onClick={copyCommand}>
+              {copiedFix ? "已复制" : "复制手动命令"}
+            </button>
+          </div>
+          <p className="fw-hint">
+            点「一键放行」会弹出 Windows
+            的账户控制，选「是」就行；也可以右键包里的「修复防火墙.cmd」，用管理员身份运行。
+          </p>
+          {fixNote && <p className="fw-hint">{fixNote}</p>}
+          <code className="fw-cmd">{firewall.command}</code>
+        </div>
       )}
     </section>
   );

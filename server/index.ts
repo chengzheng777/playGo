@@ -4,6 +4,7 @@ import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 import { WebSocketServer } from "ws";
+import { firewallStatus, openFirewall } from "./firewall";
 import { Hub } from "./hub";
 import { lanAddresses } from "./net";
 import { qrSvg } from "./qr";
@@ -110,6 +111,7 @@ const port = await pickPort();
 const rooms = new RoomManager();
 const buildId = crypto.randomUUID();
 const hub = new Hub(rooms, buildId);
+const firewall = await firewallStatus({ port });
 
 let vite: import("vite").ViteDevServer | undefined;
 if (!isProd) {
@@ -124,6 +126,11 @@ if (!isProd) {
 
 function isLoopback(host: string): boolean {
   return host === "127.0.0.1" || host === "localhost" || host === "::1";
+}
+
+function isLocalRequest(req: http.IncomingMessage): boolean {
+  const address = req.socket.remoteAddress ?? "";
+  return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
 }
 
 function visibleLanUrls() {
@@ -154,6 +161,21 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
     if (url.pathname === "/api/networks") {
       json(res, 200, { port, urls: visibleLanUrls(), host: bindHost, publicUrl });
+      return;
+    }
+
+    if (url.pathname === "/api/firewall") {
+      json(res, 200, await firewallStatus({ port }));
+      return;
+    }
+
+    if (url.pathname === "/api/firewall/open" && req.method === "POST") {
+      // 放行会弹 UAC，只允许本机（电脑上的浏览器）触发，手机端不行
+      if (!isLocalRequest(req)) {
+        json(res, 403, { error: "local only" });
+        return;
+      }
+      json(res, 200, await openFirewall(port));
       return;
     }
 
@@ -221,6 +243,12 @@ server.listen(port, bindHost, () => {
   }
   if (urls.length === 0) {
     console.log("  局域网  未检测到可用网卡，手机可能连不上");
+  }
+  if (firewall.applicable && firewall.allowed === false) {
+    console.log("  防火墙  未放行本程序，手机扫码会一直转圈");
+    console.log(
+      "          右键“修复防火墙.cmd”→“以管理员身份运行”，或开房后点二维码下方的“一键放行”",
+    );
   }
   console.log("");
   console.log(isProd ? "  生产模式：静态资源来自 dist/" : "  开发模式：Vite 中间件 + HMR");

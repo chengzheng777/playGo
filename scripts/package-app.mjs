@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { firewallCmd } from "./firewall-cmd.mjs";
 
 const root = process.cwd();
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
@@ -92,6 +93,9 @@ run(node, [
 
 const appDir = path.join(outDir, "playGo-win32-x64");
 if (!fs.existsSync(appDir)) throw new Error(`打包目录不存在：${appDir}`);
+
+// 便携解压没有安装器，防火墙放行靠这个脚本（或房间二维码下方的「一键放行」）
+fs.writeFileSync(path.join(appDir, "修复防火墙.cmd"), firewallCmd("playGo.exe"));
 
 run("tar.exe", ["-a", "-c", "-f", zipPath, "-C", outDir, "playGo-win32-x64"]);
 
