@@ -15,6 +15,20 @@ const distDir = path.join(root, "dist");
 const isProd = process.argv.includes("--prod");
 const basePort = Number(process.env.PORT ?? 8787);
 const PORT_SPAN = 10;
+const bindHost = process.env.PLAYGO_HOST?.trim() || "0.0.0.0";
+
+function normalizePublicUrl(value: string | undefined): string {
+  if (!value) return "";
+  try {
+    const parsed = new URL(value.trim());
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return "";
+  }
+}
+
+const publicUrl = normalizePublicUrl(process.env.PLAYGO_PUBLIC_URL);
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -108,6 +122,14 @@ if (!isProd) {
   });
 }
 
+function isLoopback(host: string): boolean {
+  return host === "127.0.0.1" || host === "localhost" || host === "::1";
+}
+
+function visibleLanUrls() {
+  return isLoopback(bindHost) ? [] : lanAddresses();
+}
+
 const server = http.createServer((req, res) => {
   void handleRequest(req, res);
 });
@@ -124,12 +146,14 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         port,
         rooms: rooms.size,
         buildId,
+        host: bindHost,
+        publicUrl,
       });
       return;
     }
 
     if (url.pathname === "/api/networks") {
-      json(res, 200, { port, urls: lanAddresses() });
+      json(res, 200, { port, urls: visibleLanUrls(), host: bindHost, publicUrl });
       return;
     }
 
@@ -187,8 +211,8 @@ heartbeat.unref();
 sweeper.unref();
 gameTicker.unref();
 
-server.listen(port, "0.0.0.0", () => {
-  const urls = lanAddresses();
+server.listen(port, bindHost, () => {
+  const urls = visibleLanUrls();
   console.log("");
   console.log("  playGo 已启动");
   console.log(`  本机    http://localhost:${port}`);
@@ -200,6 +224,15 @@ server.listen(port, "0.0.0.0", () => {
   }
   console.log("");
   console.log(isProd ? "  生产模式：静态资源来自 dist/" : "  开发模式：Vite 中间件 + HMR");
+  console.log(
+    bindHost === "0.0.0.0"
+      ? "  监听    所有网卡（局域网可访问；公网需端口映射或内网穿透）"
+      : `  监听    仅 ${bindHost}`,
+  );
+  if (publicUrl) {
+    console.log(`  公网    ${publicUrl}`);
+    console.log("  提醒    拿到公网链接的人都能加入，不需要时请关闭穿透");
+  }
   console.log("");
 
   if (process.argv.includes("--open")) {

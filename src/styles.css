@@ -3134,3 +3134,48 @@ select {
     height: 28px;
   }
 }
+
+/* 分享方式：局域网 / 公网 */
+.share-badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.share-badge.public {
+  border-color: rgba(251, 191, 36, 0.5);
+  color: #fbbf24;
+}
+
+.share-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.share-row .segmented {
+  margin-left: auto;
+}
+
+.public-share {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.public-share .input {
+  width: 100%;
+  height: 38px;
+}
+
+.public-share .hint {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}

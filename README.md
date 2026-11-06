@@ -39,6 +39,26 @@ pnpm package:win
 
 包内是 `runtime/node.exe` + `app/server.mjs`（服务端单文件）+ `app/dist`（前端产物）。
 
+## 公网访问（可选）
+
+默认只监听局域网，手机需要和电脑同一个 WiFi。要让不在同一网络的朋友加入：
+
+1. 在路由器上把 **8787** 端口映射到这台电脑，或用 `cloudflared` / `ngrok` 做内网穿透；
+2. 房间二维码面板把「分享方式」切到「公网」，填入公网地址；
+3. 二维码和复制出来的链接会改用这个地址。
+
+也可以启动时直接指定（PowerShell）：
+
+```powershell
+$env:PLAYGO_PUBLIC_URL="https://xxxx.trycloudflare.com"; pnpm start
+$env:PLAYGO_HOST="127.0.0.1"; pnpm dev   # 只允许本机访问
+```
+
+- `PLAYGO_PUBLIC_URL`：服务端默认公网地址，二维码面板会自动切到公网
+- `PLAYGO_HOST`：监听地址，默认 `0.0.0.0`；填 `127.0.0.1` 可只允许本机
+
+注意：公网暴露后，拿到链接的人都能加入；不需要时切回局域网或关掉穿透。应用本身不做端口映射，公网可达依赖路由器或隧道。
+
 也可以在 GitHub 上打：推送 `v*` tag，或手动运行 **Release** 工作流（Actions → Release → Run workflow）。工作流在 `windows-latest` 上构建，把 zip 附到 Release / Artifact。
 
 ## 玩法：一愚惊人

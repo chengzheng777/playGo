@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 interface Networks {
   port: number;
   urls: { ip: string; iface: string; kind: string }[];
+  host?: string;
+  publicUrl?: string;
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -12,10 +14,43 @@ const KIND_LABEL: Record<string, string> = {
   virtual: "虚拟网卡",
 };
 
+const SHARE_KEY = "playgo:share";
+
+type ShareMode = "lan" | "public";
+
+interface SharePref {
+  mode: ShareMode;
+  url: string;
+}
+
+function readShare(): SharePref | null {
+  try {
+    const raw = localStorage.getItem(SHARE_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<SharePref>;
+    if (value.mode !== "lan" && value.mode !== "public") return null;
+    return { mode: value.mode, url: typeof value.url === "string" ? value.url : "" };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeBase(value: string): string {
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return "";
+  }
+}
+
 export function QrCard({ code }: { code: string }) {
   const [networks, setNetworks] = useState<Networks | null>(null);
   const [ip, setIp] = useState("");
   const [copied, setCopied] = useState(false);
+  const [mode, setMode] = useState<ShareMode>("lan");
+  const [publicUrl, setPublicUrl] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -25,6 +60,15 @@ export function QrCard({ code }: { code: string }) {
         if (!alive) return;
         setNetworks(data);
         setIp(data.urls[0]?.ip ?? "");
+        const saved = readShare();
+        const serverPublic = normalizeBase(data.publicUrl ?? "");
+        if (saved) {
+          setMode(saved.mode);
+          setPublicUrl(saved.url || serverPublic);
+        } else if (serverPublic) {
+          setMode("public");
+          setPublicUrl(serverPublic);
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -32,8 +76,20 @@ export function QrCard({ code }: { code: string }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!networks) return;
+    try {
+      localStorage.setItem(SHARE_KEY, JSON.stringify({ mode, url: publicUrl }));
+    } catch {
+      /* 隐私模式下忽略 */
+    }
+  }, [mode, publicUrl, networks]);
+
   const port = networks?.port ?? (location.port || "8787");
-  const url = ip ? `http://${ip}:${port}/j/${code}` : `${location.origin}/j/${code}`;
+  const publicBase = normalizeBase(publicUrl);
+  const usePublic = mode === "public" && publicBase.length > 0;
+  const lanUrl = ip ? `http://${ip}:${port}/j/${code}` : `${location.origin}/j/${code}`;
+  const url = usePublic ? `${publicBase}/j/${code}` : lanUrl;
 
   async function copy() {
     try {
@@ -55,7 +111,12 @@ export function QrCard({ code }: { code: string }) {
           height={320}
         />
       </div>
-      <p className="qr-tip">手机相机扫码加入</p>
+      <p className="qr-tip">
+        <span className={`share-badge${usePublic ? " public" : ""}`}>
+          {usePublic ? "公网地址" : "局域网地址"}
+        </span>
+        手机相机扫码加入
+      </p>
 
       <div className="url-line">
         <code>{url}</code>
@@ -64,7 +125,45 @@ export function QrCard({ code }: { code: string }) {
         </button>
       </div>
 
-      {networks && networks.urls.length > 1 && (
+      <div className="share-row">
+        <span className="label">分享方式</span>
+        <div className="segmented">
+          <button
+            type="button"
+            className={mode === "lan" ? "on" : ""}
+            onClick={() => setMode("lan")}
+          >
+            局域网
+          </button>
+          <button
+            type="button"
+            className={mode === "public" ? "on" : ""}
+            onClick={() => setMode("public")}
+          >
+            公网
+          </button>
+        </div>
+      </div>
+
+      {mode === "public" && (
+        <div className="public-share">
+          <input
+            className="input"
+            value={publicUrl}
+            placeholder="https://xxxx.trycloudflare.com"
+            onChange={(event) => setPublicUrl(event.target.value)}
+          />
+          {publicBase ? (
+            <p className="hint">
+              公网地址需要先做端口映射或内网穿透。拿到链接的人都能加入，注意分享范围。
+            </p>
+          ) : (
+            <p className="warn">填写可访问的公网地址（含 http/https），或切回局域网。</p>
+          )}
+        </div>
+      )}
+
+      {networks && networks.urls.length > 1 && mode === "lan" && (
         <div className="net-picker">
           <label className="label" htmlFor="net">
             用哪个网络
