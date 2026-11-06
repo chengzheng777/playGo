@@ -14,7 +14,7 @@
 - 分享方式开关：局域网 / 公网地址，二维码与链接随之切换
 - 支持 `PLAYGO_HOST` 限制监听网卡、`PLAYGO_PUBLIC_URL` 预设公网地址
 - 新增 Electron 桌面应用：`pnpm package:app` 出带窗口的 `playGo.exe`，无命令行黑框
-- 便携包改用 WinForms 启动器：双击 `playGo.exe` 无黑框，托盘常驻，优先打开浏览器应用窗口
+- 便携包改用 WinForms 启动器：双击 `playGo.exe` 无黑框，托盘常驻，用默认浏览器打开游戏
 - 修复打包版手机扫码连不上：防火墙按 exe 路径匹配，新增自检 + 一键放行（UAC）
 - 打包件附带「修复防火墙.cmd」；启动日志与二维码面板都会提示未放行
 

@@ -155,44 +155,34 @@ internal static class Program
         string processName = browser != null ? Path.GetFileNameWithoutExtension(browser) : "";
         bool browserRunning = processName.Length > 0 &&
                               Process.GetProcessesByName(processName).Length > 0;
-
-        if (browser != null && browserRunning)
-        {
-            const string args = "--app=http://127.0.0.1:8787 --window-size=1280,860 --no-first-run";
-            try
-            {
-                var process = Process.Start(new ProcessStartInfo
-                {
-                    FileName = browser,
-                    Arguments = args,
-                    UseShellExecute = true,
-                });
-                Log("app window requested: " + browser + " pid=" + (process != null ? process.Id : 0));
-
-                if (process == null || !process.WaitForExit(2500))
-                {
-                    return;
-                }
-                Log("app window exited early: code=" + process.ExitCode);
-            }
-            catch (Exception error)
-            {
-                Log("app window failed: " + error.Message);
-            }
-        }
+        Log("browser running: " + browserRunning);
 
         try
         {
-            Process.Start(new ProcessStartInfo("http://127.0.0.1:8787")
+            Process.Start(new ProcessStartInfo
             {
-                UseShellExecute = true,
+                FileName = "cmd.exe",
+                Arguments = "/c start \"\" \"http://127.0.0.1:8787\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
             });
-            Log("default browser opened");
+            Log("browser opened via cmd start");
         }
         catch (Exception error)
         {
-            Log("default browser failed: " + error.Message);
-            MessageBox.Show("打不开浏览器，请手动访问 http://localhost:8787", "playGo");
+            Log("cmd start failed: " + error.Message);
+            try
+            {
+                Process.Start(new ProcessStartInfo("http://127.0.0.1:8787")
+                {
+                    UseShellExecute = true,
+                });
+                Log("browser opened via shell");
+            }
+            catch
+            {
+                MessageBox.Show("打不开浏览器，请手动访问 http://localhost:8787", "playGo");
+            }
         }
     }
 

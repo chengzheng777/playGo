@@ -34,8 +34,8 @@ pnpm package:win
 产出 `release/playGo-<版本>-win-x64.zip`（约 26 MB）。解压后双击 `playGo.exe`：
 
 - 自带 Node 运行时，目标电脑**不需要装 Node**
-- **没有命令行窗口**：浏览器已在运行时打开无地址栏的应用窗口，否则用默认浏览器打开
-- 托盘图标：打开窗口 / 在浏览器中打开 / 退出
+- **没有命令行窗口**：双击后自动用默认浏览器打开游戏页面
+- 托盘图标：打开游戏 / 在浏览器中打开 / 退出
 - 手机连同一个 WiFi，扫码加入
 
 包内是 `runtime/node.exe` + `app/server.mjs`（服务端单文件）+ `app/dist`（前端产物）+ `playGo.exe`（WinForms 启动器）。
