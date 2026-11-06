@@ -39,6 +39,21 @@ pnpm package:win
 
 包内是 `runtime/node.exe` + `app/server.mjs`（服务端单文件）+ `app/dist`（前端产物）。
 
+### 桌面应用（Electron）
+
+```bash
+pnpm package:app
+```
+
+产出 `release/playGo-<版本>-win-x64-app.zip`（约 151 MB）。解压后双击 `playGo.exe`：
+
+- 独立窗口，没有命令行黑框，带应用图标
+- 服务端在后台启动，窗口直接打开游戏大厅
+- 单实例：重复双击会聚焦已有窗口
+- 关闭窗口即退出，后台服务一起结束
+
+Electron 自带 Node 运行时，包体更大，但观感就是一个正常的 Windows 软件。
+
 ## 公网访问（可选）
 
 默认只监听局域网，手机需要和电脑同一个 WiFi。要让不在同一网络的朋友加入：
@@ -133,6 +148,7 @@ $env:PLAYGO_HOST="127.0.0.1"; pnpm dev   # 只允许本机访问
 | `pnpm e2e`         | 真浏览器端到端（需先起服务、装 Chrome）    |
 | `pnpm verify`      | typecheck + lint + test + build            |
 | `pnpm package:win` | 打 Windows 便携包到 `release/*.zip`        |
+| `pnpm package:app` | 打 Electron 桌面应用（窗口版 exe）         |
 
 ## 目录
 

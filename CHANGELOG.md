@@ -13,6 +13,7 @@
 - 你画我猜：修复「再来一局」无响应；横屏/键盘布局优化
 - 分享方式开关：局域网 / 公网地址，二维码与链接随之切换
 - 支持 `PLAYGO_HOST` 限制监听网卡、`PLAYGO_PUBLIC_URL` 预设公网地址
+- 新增 Electron 桌面应用：`pnpm package:app` 出带窗口的 `playGo.exe`，无命令行黑框
 
 ### 工程
 

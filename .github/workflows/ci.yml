@@ -21,6 +21,8 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
       - name: 类型检查 / Lint / 单元测试 / 构建
         run: pnpm verify

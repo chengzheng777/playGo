@@ -12,7 +12,7 @@ import { RoomManager } from "./rooms";
 const root = process.env.PLAYGO_ROOT ? path.resolve(process.env.PLAYGO_ROOT) : process.cwd();
 const distDir = path.join(root, "dist");
 
-const isProd = process.argv.includes("--prod");
+const isProd = process.argv.includes("--prod") || process.env.PLAYGO_PROD === "1";
 const basePort = Number(process.env.PORT ?? 8787);
 const PORT_SPAN = 10;
 const bindHost = process.env.PLAYGO_HOST?.trim() || "0.0.0.0";
