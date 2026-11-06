@@ -127,10 +127,16 @@ internal static class Program
         return false;
     }
 
-    private static string FindEdge()
+    private static string FindBrowser()
     {
         string[] candidates =
         {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                "Google", "Chrome", "Application", "chrome.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                "Google", "Chrome", "Application", "chrome.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Google", "Chrome", "Application", "chrome.exe"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
                 "Microsoft", "Edge", "Application", "msedge.exe"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
@@ -145,43 +151,47 @@ internal static class Program
 
     private static void OpenWindow()
     {
-        string edge = FindEdge();
-        if (edge != null)
-        {
-            string args = "--app=http://127.0.0.1:8787 --window-size=1280,860 --no-first-run";
-            try
-            {
-                string profile = Path.Combine(baseDir, "edge-profile");
-                Directory.CreateDirectory(profile);
-                args += " --user-data-dir=\"" + profile + "\"";
-            }
-            catch
-            {
-                // 目录不可写就用默认配置
-            }
+        string browser = FindBrowser();
+        string processName = browser != null ? Path.GetFileNameWithoutExtension(browser) : "";
+        bool browserRunning = processName.Length > 0 &&
+                              Process.GetProcessesByName(processName).Length > 0;
 
+        if (browser != null && browserRunning)
+        {
+            const string args = "--app=http://127.0.0.1:8787 --window-size=1280,860 --no-first-run";
             try
             {
-                Process.Start(new ProcessStartInfo
+                var process = Process.Start(new ProcessStartInfo
                 {
-                    FileName = edge,
+                    FileName = browser,
                     Arguments = args,
-                    UseShellExecute = false,
+                    UseShellExecute = true,
                 });
-                return;
+                Log("app window requested: " + browser + " pid=" + (process != null ? process.Id : 0));
+
+                if (process == null || !process.WaitForExit(2500))
+                {
+                    return;
+                }
+                Log("app window exited early: code=" + process.ExitCode);
             }
-            catch
+            catch (Exception error)
             {
-                // 回退到默认浏览器
+                Log("app window failed: " + error.Message);
             }
         }
 
         try
         {
-            Process.Start("http://127.0.0.1:8787");
+            Process.Start(new ProcessStartInfo("http://127.0.0.1:8787")
+            {
+                UseShellExecute = true,
+            });
+            Log("default browser opened");
         }
-        catch
+        catch (Exception error)
         {
+            Log("default browser failed: " + error.Message);
             MessageBox.Show("打不开浏览器，请手动访问 http://localhost:8787", "playGo");
         }
     }
