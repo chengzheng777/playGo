@@ -1,16 +1,15 @@
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { Hub } from "./hub";
 import { lanAddresses } from "./net";
 import { qrSvg } from "./qr";
 import { RoomManager } from "./rooms";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(here, "..");
+const root = process.env.PLAYGO_ROOT ? path.resolve(process.env.PLAYGO_ROOT) : process.cwd();
 const distDir = path.join(root, "dist");
 
 const isProd = process.argv.includes("--prod");
@@ -202,6 +201,17 @@ server.listen(port, "0.0.0.0", () => {
   console.log("");
   console.log(isProd ? "  生产模式：静态资源来自 dist/" : "  开发模式：Vite 中间件 + HMR");
   console.log("");
+
+  if (process.argv.includes("--open")) {
+    const url = `http://localhost:${port}`;
+    const command =
+      process.platform === "win32"
+        ? `start "" "${url}"`
+        : process.platform === "darwin"
+          ? `open "${url}"`
+          : `xdg-open "${url}"`;
+    spawn(command, { shell: true, detached: true, stdio: "ignore" }).unref();
+  }
 });
 
 function shutdown(): void {

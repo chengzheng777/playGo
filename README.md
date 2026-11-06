@@ -25,6 +25,20 @@ pnpm dev
 
 手机和电脑要在**同一个 WiFi**；Windows 首次运行时防火墙会弹窗，勾选「专用网络」。
 
+## 打包（Windows）
+
+```bash
+pnpm package:win
+```
+
+产出 `release/playGo-<版本>-win-x64.zip`（约 26 MB）。解压后双击 `playGo.cmd`：
+
+- 自带 Node 运行时，目标电脑**不需要装 Node**
+- 自动在 8787–8797 里挑端口并打开浏览器
+- 手机连同一个 WiFi，扫码加入
+
+包内是 `runtime/node.exe` + `app/server.mjs`（服务端单文件）+ `app/dist`（前端产物）。
+
 ## 玩法：一愚惊人
 
 - **房主电脑是大屏 / 主持人**：显示当前词语、模式、倒计时和比分，不参加分队。
@@ -84,18 +98,19 @@ pnpm dev
 
 ## 脚本
 
-| 命令             | 说明                                       |
-| ---------------- | ------------------------------------------ |
-| `pnpm dev`       | 开发模式，Vite 中间件 + HMR，默认 8787     |
-| `pnpm build`     | 构建前端到 `dist/`                         |
-| `pnpm start`     | 生产模式，需先 build；`PORT=xxxx` 可改端口 |
-| `pnpm typecheck` | TypeScript 类型检查                        |
-| `pnpm lint`      | Biome 检查（格式 + 规则）                  |
-| `pnpm test`      | Vitest 单元测试（三个游戏的规则引擎）      |
-| `pnpm coverage`  | 覆盖率报告，输出到 `coverage/`             |
-| `pnpm smoke`     | 对着运行中的服务跑协议 + 游戏流程冒烟      |
-| `pnpm e2e`       | 真浏览器端到端（需先起服务、装 Chrome）    |
-| `pnpm verify`    | typecheck + lint + test + build            |
+| 命令               | 说明                                       |
+| ------------------ | ------------------------------------------ |
+| `pnpm dev`         | 开发模式，Vite 中间件 + HMR，默认 8787     |
+| `pnpm build`       | 构建前端到 `dist/`                         |
+| `pnpm start`       | 生产模式，需先 build；`PORT=xxxx` 可改端口 |
+| `pnpm typecheck`   | TypeScript 类型检查                        |
+| `pnpm lint`        | Biome 检查（格式 + 规则）                  |
+| `pnpm test`        | Vitest 单元测试（三个游戏的规则引擎）      |
+| `pnpm coverage`    | 覆盖率报告，输出到 `coverage/`             |
+| `pnpm smoke`       | 对着运行中的服务跑协议 + 游戏流程冒烟      |
+| `pnpm e2e`         | 真浏览器端到端（需先起服务、装 Chrome）    |
+| `pnpm verify`      | typecheck + lint + test + build            |
+| `pnpm package:win` | 打 Windows 便携包到 `release/*.zip`        |
 
 ## 目录
 

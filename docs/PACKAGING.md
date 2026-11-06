@@ -91,17 +91,22 @@ playGo.exe
 
 ---
 
-## 5. 构建流水线
+## 5. 当前打包（v0.2.0）
+
+已实现的是「便携文件夹 + 自带 Node 运行时」：
 
 ```
-pnpm build
-  ├─ vite build                     → dist/（前端）
-  ├─ node scripts/embed-assets.ts   → src/generated/assets.ts（把 dist 打进代码）
-  ├─ esbuild src/server/index.ts    → build/server.mjs（单文件）
-  └─ bun build --compile            → playGo.exe
+pnpm package:win
+  ├─ vite build                        → dist/
+  ├─ esbuild server/index.ts --bundle  → app/server.mjs
+  ├─ copy node.exe                     → runtime/node.exe
+  ├─ copy dist/                        → app/dist/
+  └─ tar -a                            → release/playGo-0.2.0-win-x64.zip
 ```
 
-把前端产物**转成 TS 模块**再打进 bundle，而不是依赖各打包器的 asset API——这样 Bun / SEA / Deno 三种方案都能用同一份代码，迁移成本为零。前端资源用 base64 或字符串内联，体积会涨约 33%，但省掉一堆路径问题。
+解压后双击 `playGo.cmd`：脚本设置 `PLAYGO_ROOT`，用自带 `node.exe` 以 `--prod` 启动，并带 `--open` 自动打开浏览器。目标机器不需要装 Node，zip 约 26 MB。
+
+还没有做单文件 exe（Bun compile / Node SEA）：那一步需要把 `dist` 内嵌进二进制，并把静态资源改成从内存读取；当前用 `PLAYGO_ROOT` 读同目录 `dist/`，先满足「发给朋友、解压即用」。真要做时，前端资源可以按第 104 行的思路转成模块内联。
 
 ---
 
