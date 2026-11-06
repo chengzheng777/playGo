@@ -3,13 +3,14 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  package:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -27,16 +28,18 @@ jobs:
       - name: 校验
         run: pnpm verify
 
-      - name: 打包
-        run: |
-          mkdir -p release/playGo
-          cp -r dist server shared scripts package.json pnpm-lock.yaml \
-            README.md CHANGELOG.md LICENSE CONTRIBUTING.md \
-            biome.json tsconfig.json vite.config.ts vitest.config.ts \
-            release/playGo/
-          cd release && zip -r "playGo-${{ github.ref_name }}.zip" playGo
+      - name: 打 Windows 便携包
+        run: pnpm package:win
 
-      - name: 发布
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: playGo-win-x64
+          path: release/*.zip
+          if-no-files-found: error
+
+      - name: 发布 Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: release/*.zip

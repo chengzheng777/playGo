@@ -39,6 +39,8 @@ pnpm package:win
 
 包内是 `runtime/node.exe` + `app/server.mjs`（服务端单文件）+ `app/dist`（前端产物）。
 
+也可以在 GitHub 上打：推送 `v*` tag，或手动运行 **Release** 工作流（Actions → Release → Run workflow）。工作流在 `windows-latest` 上构建，把 zip 附到 Release / Artifact。
+
 ## 玩法：一愚惊人
 
 - **房主电脑是大屏 / 主持人**：显示当前词语、模式、倒计时和比分，不参加分队。
