@@ -30,6 +30,8 @@ import type { RoomManager, RoomRecord } from "./rooms";
 interface Conn {
   id: string;
   ws: WebSocket;
+  /** 客户端 IP，用于限制房间码穷举；空字符串表示未知。 */
+  ip: string;
   roomCode?: string;
   playerId?: string;
   alive: boolean;
@@ -41,6 +43,8 @@ interface Conn {
 const RATE_LIMIT_PER_SEC = 40;
 const CHAT_COOLDOWN_MS = 600;
 const RECONNECT_GRACE_MS = 90_000;
+/** 单 IP 每分钟最多失败多少次 join（房间不存在 / token 错误），防房间码穷举 */
+const JOIN_FAILURES_PER_MIN = 30;
 /** 单帧上限：拍颜色的照片是 base64，360px JPEG 大约 20–60 KB，留足余量 */
 const MAX_FRAME_CHARS = 512 * 1024;
 
@@ -200,16 +204,20 @@ function parseClientMessage(raw: string): Parsed {
 export class Hub {
   private readonly conns = new Map<string, Conn>();
   private readonly removalTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly joinFailures = new Map<string, { count: number; resetAt: number }>();
 
   constructor(
     private readonly rooms: RoomManager,
     private readonly buildId: string,
+    /** 0 表示不限制；公网部署时用 PLAYGO_MAX_ROOMS 限制总房间数。 */
+    private readonly maxRooms = 0,
   ) {}
 
-  attach(ws: WebSocket): void {
+  attach(ws: WebSocket, ip = ""): void {
     const conn: Conn = {
       id: randomUUID(),
       ws,
+      ip,
       alive: true,
       rateCount: 0,
       rateResetAt: 0,
@@ -245,6 +253,10 @@ export class Hub {
 
   /** 心跳：定期 ping，连续一轮没有 pong 就断开 */
   sweep(): void {
+    const now = Date.now();
+    for (const [ip, entry] of this.joinFailures) {
+      if (now > entry.resetAt) this.joinFailures.delete(ip);
+    }
     for (const conn of this.conns.values()) {
       if (!conn.alive) {
         conn.ws.terminate();
@@ -338,6 +350,10 @@ export class Hub {
       this.replyError(conn, "BAD_PHASE", "你已经在一个房间里了");
       return;
     }
+    if (this.maxRooms > 0 && this.rooms.size >= this.maxRooms) {
+      this.replyError(conn, "ROOM_FULL", "服务器房间已满，请稍后再试");
+      return;
+    }
     const initialGame = gameId && isPlayableGame(gameId) ? gameId : null;
     const { record, player, token } = this.rooms.create(name, role, initialGame, avatar);
     this.bind(conn, record.room.code, player.id);
@@ -358,11 +374,19 @@ export class Hub {
       return;
     }
 
+    if (this.joinBlocked(conn.ip)) {
+      this.replyError(conn, "RATE_LIMITED", "尝试次数太多，请稍后再试");
+      return;
+    }
+
     const result = data.token
       ? this.rooms.reconnect(data.code, data.token)
       : this.rooms.join(data.code, data.name ?? "", data.role ?? "player", data.avatar);
 
     if (!result.ok) {
+      if (result.error === "ROOM_NOT_FOUND" || result.error === "BAD_TOKEN") {
+        this.recordJoinFailure(conn.ip);
+      }
       this.replyError(conn, result.error, this.joinErrorMessage(result.error));
       return;
     }
@@ -755,6 +779,23 @@ export class Hub {
     } catch {
       /* ignore */
     }
+  }
+
+  private joinBlocked(ip: string): boolean {
+    if (!ip) return false;
+    const entry = this.joinFailures.get(ip);
+    return entry != null && Date.now() <= entry.resetAt && entry.count >= JOIN_FAILURES_PER_MIN;
+  }
+
+  private recordJoinFailure(ip: string): void {
+    if (!ip) return;
+    const now = Date.now();
+    const entry = this.joinFailures.get(ip);
+    if (entry == null || now > entry.resetAt) {
+      this.joinFailures.set(ip, { count: 1, resetAt: now + 60_000 });
+      return;
+    }
+    entry.count += 1;
   }
 
   private joinErrorMessage(code: string): string {

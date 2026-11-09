@@ -1,0 +1,14 @@
+node_modules
+release
+.cache
+.tmp
+.git
+.github
+coverage
+e2e/.artifacts
+electron/app
+electron/main.build.cjs
+dist
+*.log
+.env
+deploy/.env

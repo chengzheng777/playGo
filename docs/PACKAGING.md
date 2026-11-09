@@ -108,6 +108,26 @@ pnpm package:win
 
 还没有做单文件 exe（Bun compile / Node SEA）：那一步需要把 `dist` 内嵌进二进制，并把静态资源改成从内存读取；当前用 `PLAYGO_ROOT` 读同目录 `dist/`，先满足「发给朋友、解压即用」。真要做时，前端资源可以按第 104 行的思路转成模块内联。
 
+### 5.1 Electron 安装版（已实现）
+
+`pnpm package:app` 现在走 electron-builder：
+
+```
+vite build + esbuild server/index.ts  → electron/app/{server.mjs,dist}
+esbuild electron/main.cjs            → electron/main.build.cjs（electron-updater 一起打进）
+electron-builder --win nsis          → release/app/playGo-<版本>-setup-x64.exe
+```
+
+补齐的能力：
+
+- **NSIS 安装包**：当前用户安装、开始菜单 / 桌面快捷方式、卸载入口，不再是解压文件夹；
+- **asar**：主进程进 `app.asar`，服务端与前端作为 `extraResources` 放在 `resources/app`，`utilityProcess.fork` 能拿到真实文件路径；
+- **版本资源**：exe 带 `ProductName` / `FileVersion`；
+- **自动更新**：构建时设置 `PLAYGO_UPDATE_URL` 生成 `latest.yml`，运行时用 `electron-updater` 检查、下载、重启安装；
+- **可选签名**：`CSC_LINK` / `CSC_KEY_PASSWORD` 交给 electron-builder；不配置也能出包，只是 SmartScreen 会提示。
+
+仍未做的是“单文件免安装 exe”。NSIS 安装包解决的是“像正常软件一样安装/卸载”，不是“一个文件双击即用”。
+
 ---
 
 ## 6. 打包后的 8 个坑
@@ -206,5 +226,5 @@ Tauri 的后端是 Rust，接不上这套 Node 服务，只有三条路，每条
 1. 打成一个包：✅ 可以，且推荐。
 2. 只打 PC 房主端：✅ 手机端零安装是核心卖点。
 3. 纯网页本地跑：❌ 不可能，浏览器没有监听端口的能力。
-4. 现在的动作：**不打包**，先做 M0 通讯；M4 再用 Bun compile 出单文件 exe + Edge `--app` 模式。
+4. 现在的动作：便携包（自带 Node）和 Electron 安装包都已可用；单文件 exe 仍是一个可选优化，不再是分发的前置条件。
 5. 非要套壳：**Electron**（服务端零改动）；Tauri 留给「Rust 重写服务端」或「蓝牙复活」那天。

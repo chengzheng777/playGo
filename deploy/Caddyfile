@@ -1,0 +1,17 @@
+{$PLAYGO_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# WebSocket 和普通 HTTP 走同一个端口，Caddy 会自动处理 Upgrade。
+	# 覆盖而不是追加 X-Forwarded-For，避免客户端伪造第一段 IP。
+	reverse_proxy playgo:8787 {
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}

@@ -1,3 +1,4 @@
+import type { IncomingMessage } from "node:http";
 import os from "node:os";
 
 export type NetKind = "wifi" | "ethernet" | "other" | "virtual";
@@ -40,4 +41,18 @@ export function lanAddresses(): LanAddress[] {
   }
 
   return out.sort((a, b) => RANK[a.kind] - RANK[b.kind] || a.ip.localeCompare(b.ip));
+}
+
+/**
+ * 取客户端 IP：反代后面用 X-Forwarded-For 的第一段；直连时用 socket 地址。
+ * 只有明确设置 PLAYGO_TRUST_PROXY=1 才信任代理头，避免被伪造。
+ */
+export function clientIp(req: IncomingMessage, trustProxy: boolean): string {
+  if (trustProxy) {
+    const forwarded = req.headers["x-forwarded-for"];
+    const value = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+    const first = value?.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  return req.socket.remoteAddress ?? "unknown";
 }

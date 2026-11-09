@@ -6,7 +6,7 @@ import path from "node:path";
 import { WebSocketServer } from "ws";
 import { firewallStatus, openFirewall } from "./firewall";
 import { Hub } from "./hub";
-import { lanAddresses } from "./net";
+import { clientIp, lanAddresses } from "./net";
 import { qrSvg } from "./qr";
 import { RoomManager } from "./rooms";
 
@@ -30,6 +30,38 @@ function normalizePublicUrl(value: string | undefined): string {
 }
 
 const publicUrl = normalizePublicUrl(process.env.PLAYGO_PUBLIC_URL);
+
+/** 公网部署时关掉全服房间列表（默认开启，保持局域网体验不变）。 */
+const roomDiscovery = process.env.PLAYGO_ROOM_DISCOVERY !== "0";
+/** 只有放在反向代理后面才信任 X-Forwarded-For。 */
+const trustProxy = process.env.PLAYGO_TRUST_PROXY === "1";
+
+function readLimit(name: string): number {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+const maxRooms = readLimit("PLAYGO_MAX_ROOMS");
+const maxConnections = readLimit("PLAYGO_MAX_CONNECTIONS");
+const maxConnectionsPerIp = readLimit("PLAYGO_MAX_CONNECTIONS_PER_IP");
+
+const allowedOrigins = (process.env.PLAYGO_ALLOWED_ORIGINS ?? "")
+  .split(",")
+  .map((item) => item.trim())
+  .filter(Boolean);
+if (allowedOrigins.length === 0 && publicUrl) {
+  try {
+    allowedOrigins.push(new URL(publicUrl).origin);
+  } catch {
+    // normalizePublicUrl 已经校验过，这里只是兜底
+  }
+}
+
+function originAllowed(origin: string | undefined): boolean {
+  // 非浏览器客户端可能不带 Origin；带了的必须命中白名单。
+  if (!origin || allowedOrigins.length === 0) return true;
+  return allowedOrigins.includes(origin);
+}
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -110,7 +142,7 @@ function serveStatic(res: http.ServerResponse, pathname: string): void {
 const port = await pickPort();
 const rooms = new RoomManager();
 const buildId = crypto.randomUUID();
-const hub = new Hub(rooms, buildId);
+const hub = new Hub(rooms, buildId, maxRooms);
 const firewall = await firewallStatus({ port });
 
 let vite: import("vite").ViteDevServer | undefined;
@@ -155,12 +187,21 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         buildId,
         host: bindHost,
         publicUrl,
+        mode: publicUrl ? "remote" : "lan",
+        discovery: roomDiscovery,
       });
       return;
     }
 
     if (url.pathname === "/api/networks") {
-      json(res, 200, { port, urls: visibleLanUrls(), host: bindHost, publicUrl });
+      json(res, 200, {
+        port,
+        urls: visibleLanUrls(),
+        host: bindHost,
+        publicUrl,
+        mode: publicUrl ? "remote" : "lan",
+        discovery: roomDiscovery,
+      });
       return;
     }
 
@@ -180,7 +221,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     }
 
     if (url.pathname === "/api/rooms") {
-      json(res, 200, { rooms: rooms.list() });
+      // 公网服务默认不暴露房间码列表，只能扫码或用房间码加入。
+      json(res, 200, { rooms: roomDiscovery ? rooms.list() : [] });
       return;
     }
 
@@ -215,12 +257,49 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 }
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 512 * 1024 });
-wss.on("connection", (ws) => hub.attach(ws));
+const ipConnections = new Map<string, number>();
+
+wss.on("connection", (ws, req) => {
+  const ip = clientIp(req, trustProxy);
+  ipConnections.set(ip, (ipConnections.get(ip) ?? 0) + 1);
+  ws.once("close", () => {
+    const left = (ipConnections.get(ip) ?? 1) - 1;
+    if (left > 0) ipConnections.set(ip, left);
+    else ipConnections.delete(ip);
+  });
+  hub.attach(ws, ip);
+});
+
+function rejectUpgrade(
+  socket: import("node:stream").Duplex,
+  status: number,
+  message: string,
+): void {
+  try {
+    socket.write(`HTTP/1.1 ${status} ${message}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+  } catch {
+    // 连接已经断了
+  }
+  socket.destroy();
+}
 
 server.on("upgrade", (req, socket, head) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
   if (url.pathname !== "/ws") {
     socket.destroy();
+    return;
+  }
+  if (!originAllowed(req.headers.origin)) {
+    rejectUpgrade(socket, 403, "Forbidden");
+    return;
+  }
+  if (maxConnections > 0 && wss.clients.size >= maxConnections) {
+    rejectUpgrade(socket, 503, "Service Unavailable");
+    return;
+  }
+  const ip = clientIp(req, trustProxy);
+  if (maxConnectionsPerIp > 0 && (ipConnections.get(ip) ?? 0) >= maxConnectionsPerIp) {
+    rejectUpgrade(socket, 429, "Too Many Requests");
     return;
   }
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
@@ -261,6 +340,11 @@ server.listen(port, bindHost, () => {
     console.log(`  公网    ${publicUrl}`);
     console.log("  提醒    拿到公网链接的人都能加入，不需要时请关闭穿透");
   }
+  if (!roomDiscovery) {
+    console.log("  房间列表 已关闭（PLAYGO_ROOM_DISCOVERY=0），只能扫码或输房间码加入");
+  }
+  if (maxRooms > 0) console.log(`  容量    最多 ${maxRooms} 个房间`);
+  if (maxConnections > 0) console.log(`  连接    最多 ${maxConnections} 个 WebSocket`);
   console.log("");
 
   if (process.argv.includes("--open")) {

@@ -3,7 +3,7 @@
   "productName": "playGo",
   "version": "0.2.0",
   "description": "局域网多人游戏：一愚惊人、UNO、拍颜色、你画我猜",
-  "main": "main.cjs",
+  "main": "main.build.cjs",
   "author": "playGo",
   "license": "MIT"
 }

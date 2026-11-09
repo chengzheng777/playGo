@@ -1,0 +1,43 @@
+services:
+  playgo:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      PLAYGO_PUBLIC_URL: ${PLAYGO_PUBLIC_URL:?请在 deploy/.env 里设置 PLAYGO_PUBLIC_URL}
+      PLAYGO_ALLOWED_ORIGINS: ${PLAYGO_PUBLIC_URL:?请在 deploy/.env 里设置 PLAYGO_PUBLIC_URL}
+      PLAYGO_ROOM_DISCOVERY: "0"
+      PLAYGO_MAX_ROOMS: "200"
+      PLAYGO_MAX_CONNECTIONS: "1000"
+      PLAYGO_MAX_CONNECTIONS_PER_IP: "20"
+      PLAYGO_TRUST_PROXY: "1"
+    expose:
+      - "8787"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      playgo:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      PLAYGO_DOMAIN: ${PLAYGO_DOMAIN:?请在 deploy/.env 里设置 PLAYGO_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

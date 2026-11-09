@@ -1,0 +1,24 @@
+services:
+  playgo:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: playgo
+    restart: unless-stopped
+    # 宝塔的 Nginx 占用 80/443，应用只绑本机回环，由宝塔站点反代。
+    ports:
+      - "127.0.0.1:8787:8787"
+    environment:
+      PLAYGO_PUBLIC_URL: ${PLAYGO_PUBLIC_URL:?请在 deploy/.env 里设置 PLAYGO_PUBLIC_URL}
+      PLAYGO_ALLOWED_ORIGINS: ${PLAYGO_PUBLIC_URL:?请在 deploy/.env 里设置 PLAYGO_PUBLIC_URL}
+      PLAYGO_ROOM_DISCOVERY: "0"
+      PLAYGO_MAX_ROOMS: "200"
+      PLAYGO_MAX_CONNECTIONS: "1000"
+      PLAYGO_MAX_CONNECTIONS_PER_IP: "20"
+      PLAYGO_TRUST_PROXY: "1"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 15s

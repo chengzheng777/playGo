@@ -7,11 +7,20 @@ import { ProfileEditor } from "../components/ProfileEditor";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import { store, useAppState } from "../store";
 
+interface ServerNetworks {
+  urls: { ip: string; iface: string; kind: string }[];
+  port: number;
+  publicUrl?: string;
+  mode?: "lan" | "remote";
+  discovery?: boolean;
+}
+
 export function HomeView() {
   const state = useAppState();
   const profile = state.profile;
   const isMobile = useMediaQuery("(max-width: 1024px), (pointer: coarse)");
 
+  const [networks, setNetworks] = useState<ServerNetworks | null>(null);
   const [rooms, setRooms] = useState<RoomSummary[] | null>(null);
   const [gameId, setGameId] = useState("yiyu");
   const [code, setCode] = useState("");
@@ -30,10 +39,30 @@ export function HomeView() {
   }, []);
 
   useEffect(() => {
+    let alive = true;
+    fetch("/api/networks")
+      .then((response) => response.json() as Promise<ServerNetworks>)
+      .then((data) => {
+        if (alive) setNetworks(data);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // 公网服务可以关闭房间列表，避免陌生人看到所有房间码。
+  const discovery = networks?.discovery !== false;
+
+  useEffect(() => {
+    if (!discovery) {
+      setRooms([]);
+      return;
+    }
     void loadRooms();
     const timer = window.setInterval(loadRooms, 3000);
     return () => window.clearInterval(timer);
-  }, [loadRooms]);
+  }, [discovery, loadRooms]);
 
   if (!profile) return null;
 
@@ -145,7 +174,7 @@ export function HomeView() {
 
       {isMobile ? (
         <>
-          {renderRooms()}
+          {discovery && renderRooms()}
 
           <button className="btn btn-primary btn-block" onClick={() => setCreateOpen(true)}>
             创建房间
@@ -172,7 +201,7 @@ export function HomeView() {
             <p className="hint">房主电脑会当大屏，手机玩家扫码加入后分队。</p>
           </section>
 
-          {renderRooms()}
+          {discovery && renderRooms()}
 
           <section className="panel">
             <label className="label" htmlFor="room-code">
@@ -203,7 +232,9 @@ export function HomeView() {
         </>
       )}
 
-      <footer className="foot">局域网直连 · 不需要联网</footer>
+      <footer className="foot">
+        {networks?.mode === "remote" ? "公网联机 · 扫码即玩" : "局域网直连 · 不需要联网"}
+      </footer>
 
       {createOpen && (
         <div className="modal-mask" onClick={() => setCreateOpen(false)}>

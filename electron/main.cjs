@@ -1,11 +1,16 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { app, BrowserWindow, Menu, dialog, shell, utilityProcess } = require("electron");
+
+app.setName("playGo");
+app.setAppUserModelId("com.playgo.app");
 app.disableHardwareAcceleration();
 
-const LOG_FILE = path.join(path.dirname(process.execPath), "playgo-electron.log");
+// 安装到 Program Files 时 exe 目录不可写，日志统一放到用户数据目录。
+const LOG_FILE = path.join(app.getPath("userData"), "playgo-electron.log");
 function log(...args) {
   try {
+    fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
     fs.appendFileSync(LOG_FILE, `${new Date().toISOString()} ${args.join(" ")}\n`);
   } catch {
     /* ignore */
@@ -21,7 +26,11 @@ log("boot", process.argv.join(" "));
 log("appPath", app.getAppPath());
 log("resources", process.resourcesPath);
 
-const RESOURCES = path.join(app.getAppPath(), "app");
+// asar 里的 __dirname 不能直接当文件路径用：服务端与前端产物由 electron-builder
+// 作为 extraResources 放到 resources/app（asar 外），这里按打包/开发两种形态取路径。
+const RESOURCES = app.isPackaged
+  ? path.join(process.resourcesPath, "app")
+  : path.join(__dirname, "app");
 const BASE_PORT = 8787;
 const PORT_COUNT = 10;
 
@@ -124,6 +133,77 @@ function createWindow(port) {
   win.loadURL(`http://127.0.0.1:${port}`).catch((error) => log("loadURL error", String(error)));
 }
 
+let updaterTimer = null;
+
+/**
+ * 自动更新只在安装版里启用：
+ * - 构建时设置了 PLAYGO_UPDATE_URL，electron-builder 会生成 app-update.yml；
+ * - 也可以在运行时用 PLAYGO_UPDATE_URL 临时覆盖更新源（方便测试）。
+ * 便携版 / 开发模式没有 app-update.yml，直接跳过。
+ */
+function setupUpdater() {
+  if (!app.isPackaged) return;
+
+  const override = process.env.PLAYGO_UPDATE_URL?.trim();
+  const configFile = path.join(process.resourcesPath, "app-update.yml");
+  if (!override && !fs.existsSync(configFile)) {
+    log("updater disabled: no feed configured");
+    return;
+  }
+
+  let autoUpdater;
+  try {
+    ({ autoUpdater } = require("electron-updater"));
+  } catch (error) {
+    log("updater unavailable", error?.message ?? String(error));
+    return;
+  }
+
+  autoUpdater.logger = {
+    info: (...args) => log("updater", ...args),
+    warn: (...args) => log("updater", ...args),
+    error: (...args) => log("updater", ...args),
+    debug: () => undefined,
+  };
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  if (override) {
+    autoUpdater.setFeedURL({ provider: "generic", url: override.replace(/\/+$/, "") });
+  }
+
+  autoUpdater.on("update-available", (info) => log("update available", info?.version));
+  autoUpdater.on("update-not-available", () => log("update not available"));
+  autoUpdater.on("update-downloaded", (info) => {
+    log("update downloaded", info?.version);
+    const options = {
+      type: "info",
+      title: "playGo 更新",
+      message: `新版本 ${info?.version ?? ""} 已下载`,
+      detail: "重启后会自动完成安装。",
+      buttons: ["立即重启", "稍后"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    };
+    const ask = win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options);
+    ask.then((result) => {
+      if (result.response === 0) autoUpdater.quitAndInstall();
+    });
+  });
+  autoUpdater.on("error", (error) => log("updater error", error?.message ?? String(error)));
+
+  const check = () => {
+    autoUpdater.checkForUpdates().catch((error) => {
+      log("updater check failed", error?.message ?? String(error));
+    });
+  };
+  // 不阻塞启动；之后每 6 小时再查一次。
+  setTimeout(check, 10_000).unref?.();
+  updaterTimer = setInterval(check, 6 * 60 * 60 * 1000);
+  updaterTimer.unref?.();
+}
+
 const locked = app.requestSingleInstanceLock();
 log("singleInstanceLock", String(locked));
 
@@ -139,11 +219,12 @@ if (!locked) {
   });
 
   app.whenReady().then(async () => {
-    log("whenReady");
+    log("whenReady", "version", app.getVersion(), "packaged", String(app.isPackaged));
     Menu.setApplicationMenu(null);
     try {
       const port = await startServer();
       createWindow(port);
+      setupUpdater();
     } catch (error) {
       log("startup failed", error?.stack ?? String(error));
       dialog.showErrorBox("playGo 启动失败", String(error?.message ?? error));
@@ -158,6 +239,7 @@ if (!locked) {
   app.on("before-quit", () => {
     log("before-quit");
     quitting = true;
+    if (updaterTimer) clearInterval(updaterTimer);
     server?.kill();
   });
 }

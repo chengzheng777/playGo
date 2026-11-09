@@ -49,3 +49,4 @@ release/
 # 本地缓存
 .cache/
 electron/app/
+electron/main.build.cjs

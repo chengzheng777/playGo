@@ -86,6 +86,9 @@ function BoardCanvas({ strokes, event }: { strokes: DrawStroke[]; event: DrawEve
     if (!ctx) return;
     clearBoard(ctx);
     lastPoint.current.clear();
+    // 每次 room.state 都会重放全量笔迹，客户端的 drawEvent 序号也会从 1 重新开始；
+    // 这里必须同步清零，否则新一轮/猜对后的增量会被当成旧事件丢掉。
+    lastSeq.current = 0;
     for (const stroke of strokes) {
       paintPolyline(ctx, stroke.points, stroke.color, stroke.width);
       const last = stroke.points[stroke.points.length - 1];

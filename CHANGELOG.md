@@ -10,6 +10,7 @@
 - 平板 / iPad 自动使用手机布局
 - 你画我猜：猜词记录全场可见；房主可设轮数与每轮时长
 - 你画我猜：猜对按剩余时间加成分数，同分按累计用时决胜
+- 你画我猜：修复第二轮 / 猜对后大屏不再同步笔迹（全量状态后客户端事件序号未重置）
 - 你画我猜：修复「再来一局」无响应；横屏/键盘布局优化
 - 分享方式开关：局域网 / 公网地址，二维码与链接随之切换
 - 支持 `PLAYGO_HOST` 限制监听网卡、`PLAYGO_PUBLIC_URL` 预设公网地址
@@ -17,6 +18,21 @@
 - 便携包改用 WinForms 启动器：双击 `playGo.exe` 无黑框，托盘常驻，用默认浏览器打开游戏
 - 修复打包版手机扫码连不上：防火墙按 exe 路径匹配，新增自检 + 一键放行（UAC）
 - 打包件附带「修复防火墙.cmd」；启动日志与二维码面板都会提示未放行
+
+### 分发
+
+- Electron 改用 electron-builder：输出 NSIS 安装包，创建桌面/开始菜单快捷方式与卸载入口
+- Electron 主进程打进 asar，服务端/前端作为 `extraResources`；日志改到用户数据目录，安装到 Program Files 也可写
+- 加入 `electron-updater`：`PLAYGO_UPDATE_URL` 生成 `latest.yml`，启动后检查并提示重启安装
+- 支持 `CSC_LINK` / `CSC_KEY_PASSWORD` 可选代码签名；README 补充签名与更新源说明
+- 远端服务版：Dockerfile + docker-compose + Caddy 自动 HTTPS，新增 `docs/REMOTE.md`
+
+### 远程部署
+
+- `PLAYGO_ROOM_DISCOVERY=0` 可关闭全服房间列表，避免公网暴露所有房间码
+- 新增 `PLAYGO_MAX_ROOMS`、`PLAYGO_MAX_CONNECTIONS`、`PLAYGO_MAX_CONNECTIONS_PER_IP`
+- 新增 `PLAYGO_ALLOWED_ORIGINS` 校验 WebSocket Origin；`PLAYGO_TRUST_PROXY=1` 时按 `X-Forwarded-For` 限连接
+- `/api/networks` / `/api/health` 返回 `mode` 与 `discovery`；公网模式二维码只显示公网地址
 
 ### 工程
 

@@ -5,6 +5,8 @@ interface Networks {
   urls: { ip: string; iface: string; kind: string }[];
   host?: string;
   publicUrl?: string;
+  mode?: "lan" | "remote";
+  discovery?: boolean;
 }
 
 interface FirewallStatus {
@@ -89,12 +91,13 @@ export function QrCard({ code }: { code: string }) {
         setIp(data.urls[0]?.ip ?? "");
         const saved = readShare();
         const serverPublic = normalizeBase(data.publicUrl ?? "");
-        if (saved) {
-          setMode(saved.mode);
-          setPublicUrl(saved.url || serverPublic);
-        } else if (serverPublic) {
+        if (serverPublic) {
+          // 服务端明确给了公网地址（远程服务版），不再让本地保存的“局域网”覆盖它。
           setMode("public");
           setPublicUrl(serverPublic);
+        } else if (saved) {
+          setMode(saved.mode);
+          setPublicUrl(saved.url);
         }
       })
       .catch(() => undefined);
@@ -125,6 +128,7 @@ export function QrCard({ code }: { code: string }) {
     }
   }, [mode, publicUrl, networks]);
 
+  const isRemote = networks?.mode === "remote";
   const port = networks?.port ?? (location.port || "8787");
   const publicBase = normalizeBase(publicUrl);
   const usePublic = mode === "public" && publicBase.length > 0;
@@ -206,25 +210,27 @@ export function QrCard({ code }: { code: string }) {
         </button>
       </div>
 
-      <div className="share-row">
-        <span className="label">分享方式</span>
-        <div className="segmented">
-          <button
-            type="button"
-            className={mode === "lan" ? "on" : ""}
-            onClick={() => setMode("lan")}
-          >
-            局域网
-          </button>
-          <button
-            type="button"
-            className={mode === "public" ? "on" : ""}
-            onClick={() => setMode("public")}
-          >
-            公网
-          </button>
+      {!isRemote && (
+        <div className="share-row">
+          <span className="label">分享方式</span>
+          <div className="segmented">
+            <button
+              type="button"
+              className={mode === "lan" ? "on" : ""}
+              onClick={() => setMode("lan")}
+            >
+              局域网
+            </button>
+            <button
+              type="button"
+              className={mode === "public" ? "on" : ""}
+              onClick={() => setMode("public")}
+            >
+              公网
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {mode === "public" && (
         <div className="public-share">
@@ -236,7 +242,9 @@ export function QrCard({ code }: { code: string }) {
           />
           {publicBase ? (
             <p className="hint">
-              公网地址需要先做端口映射或内网穿透。拿到链接的人都能加入，注意分享范围。
+              {isRemote
+                ? "服务器公网地址。拿到链接的人都能加入，注意分享范围。"
+                : "公网地址需要先做端口映射或内网穿透。拿到链接的人都能加入，注意分享范围。"}
             </p>
           ) : (
             <p className="warn">填写可访问的公网地址（含 http/https），或切回局域网。</p>
@@ -259,7 +267,7 @@ export function QrCard({ code }: { code: string }) {
         </div>
       )}
 
-      {networks && networks.urls.length === 0 && (
+      {!isRemote && networks && networks.urls.length === 0 && (
         <p className="warn">没检测到局域网地址，先把电脑连上 WiFi 或网线。</p>
       )}
 

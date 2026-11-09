@@ -40,20 +40,31 @@ pnpm package:win
 
 包内是 `runtime/node.exe` + `app/server.mjs`（服务端单文件）+ `app/dist`（前端产物）+ `playGo.exe`（WinForms 启动器）。
 
-### 桌面应用（Electron）
+### 桌面安装版（Electron + NSIS）
 
 ```bash
 pnpm package:app
 ```
 
-产出 `release/playGo-<版本>-win-x64-app.zip`（约 151 MB）。解压后双击 `playGo.exe`：
+产出 `release/app/playGo-<版本>-setup-x64.exe`（约 150 MB）：
 
+- 安装到当前用户，创建桌面 / 开始菜单快捷方式，带卸载入口（“应用和功能”里可见）
 - 独立窗口，没有命令行黑框，带应用图标
-- 服务端在后台启动，窗口直接打开游戏大厅
-- 单实例：重复双击会聚焦已有窗口
-- 关闭窗口即退出，后台服务一起结束
+- 服务端作为 Electron 子进程在后台启动，窗口直接打开游戏大厅
+- 单实例：重复双击会聚焦已有窗口；关闭窗口即退出，后台服务一起结束
+- 主进程打进 asar，服务端与 `dist/` 作为 `extraResources` 放在 asar 外；exe 带产品名和版本资源
+- `release/app/win-unpacked/` 是未打包目录，方便排查启动问题
+- 只想快速验打包链路时设 `PLAYGO_DIR_ONLY=1`，只生成 `win-unpacked`，不跑 NSIS
 
-Electron 自带 Node 运行时，包体更大，但观感就是一个正常的 Windows 软件。
+**自动更新**：构建时设置 `PLAYGO_UPDATE_URL`（一个能放静态文件的 HTTPS 目录），electron-builder 会生成 `latest.yml`；把 `latest.yml`、安装包和 `*.blockmap` 一起上传到该目录即可。安装版启动 10 秒后检查一次，之后每 6 小时检查；下载完成后询问是否重启安装。更新源必须走 HTTPS；正式分发建议同时做代码签名，否则无法验证更新包的发布者。
+
+```powershell
+$env:PLAYGO_UPDATE_URL="https://dl.example.com/playgo"; pnpm package:app
+```
+
+**代码签名**：设置 `CSC_LINK`（.pfx 路径或 base64）和 `CSC_KEY_PASSWORD` 后，electron-builder 会自动签名；不设置也能构建，但首次运行可能触发 SmartScreen。
+
+> 本地打包会从 GitHub 下载 NSIS 工具链；网络不通时可设置 `ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/`。CI 的 `windows-latest` 环境会自动完成安装包构建，有证书时同时签名。
 
 ## 公网访问（可选）
 
@@ -75,7 +86,21 @@ $env:PLAYGO_HOST="127.0.0.1"; pnpm dev   # 只允许本机访问
 
 注意：公网暴露后，拿到链接的人都能加入；不需要时切回局域网或关掉穿透。应用本身不做端口映射，公网可达依赖路由器或隧道。
 
-也可以在 GitHub 上打：推送 `v*` tag，或手动运行 **Release** 工作流（Actions → Release → Run workflow）。工作流在 `windows-latest` 上构建，把 zip 附到 Release / Artifact。
+## 远程服务版（Docker）
+
+如果有一台公网服务器，可以把同一套服务端常驻部署，玩家不需要和房主在同一网络：
+
+```bash
+cd deploy
+cp .env.example .env    # 填域名和 https 地址
+docker compose up -d --build
+```
+
+`deploy/docker-compose.yml` 会起两个容器：playGo（Node 服务，只监听容器网络）和 Caddy（自动申请 HTTPS、反代 HTTP/WebSocket）。远程模式默认关闭全服房间列表，只能扫码或输房间码加入；容量、Origin 白名单、按 IP 限连接等参数都在 `deploy/.env` / compose 里。
+
+完整架构、容量评估、安全清单和扩容路线见 **[远程服务版部署](docs/REMOTE.md)**。
+
+也可以在 GitHub 上打：推送 `v*` tag，或手动运行 **Release** 工作流（Actions → Release → Run workflow）。工作流在 `windows-latest` 上构建，把便携包、安装包和更新清单附到 Release / Artifact。
 
 ## 玩法：一愚惊人
 
@@ -149,7 +174,7 @@ $env:PLAYGO_HOST="127.0.0.1"; pnpm dev   # 只允许本机访问
 | `pnpm e2e`         | 真浏览器端到端（需先起服务、装 Chrome）    |
 | `pnpm verify`      | typecheck + lint + test + build            |
 | `pnpm package:win` | 打 Windows 便携包到 `release/*.zip`        |
-| `pnpm package:app` | 打 Electron 桌面应用（窗口版 exe）         |
+| `pnpm package:app` | 打 Electron 安装包（NSIS + 自动更新清单）  |
 
 ## 目录
 
@@ -206,4 +231,5 @@ scripts/           冒烟测试
 - [规格目录](specs/README.md) —— SDD 规格：每个游戏的规则、边界与验收标准
 - [贡献指南](CONTRIBUTING.md) —— 开发流程、提交规范、完成定义
 - [打包与分发](docs/PACKAGING.md) —— 单文件 exe 方案、Electron 与 Tauri 选型
+- [远程服务版部署](docs/REMOTE.md) —— Docker + Caddy、容量、安全与扩容路线
 - [更新日志](CHANGELOG.md) —— 版本变更记录
