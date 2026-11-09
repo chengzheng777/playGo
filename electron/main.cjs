@@ -1,26 +1,48 @@
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { app, BrowserWindow, Menu, dialog, shell, utilityProcess } = require("electron");
 
-app.setName("playGo");
-app.setAppUserModelId("com.playgo.app");
-app.disableHardwareAcceleration();
+// 不要在 app ready 之前调用 app.getPath("userData")；部分 Electron 版本会直接
+// 抛错，表现为双击后完全没反应、连日志都没有。这里用环境变量拼路径，并额外写
+// 一份到 exe 旁边，方便排查“进程根本没起来 / 被安全软件拦截”的情况。
+function logTargets() {
+  const targets = [];
+  if (process.env.APPDATA) {
+    targets.push(path.join(process.env.APPDATA, "playGo", "playgo-electron.log"));
+  } else {
+    targets.push(path.join(os.homedir(), ".config", "playGo", "playgo-electron.log"));
+  }
+  targets.push(path.join(path.dirname(process.execPath), "playgo-startup.log"));
+  return targets;
+}
 
-// 安装到 Program Files 时 exe 目录不可写，日志统一放到用户数据目录。
-const LOG_FILE = path.join(app.getPath("userData"), "playgo-electron.log");
 function log(...args) {
-  try {
-    fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
-    fs.appendFileSync(LOG_FILE, `${new Date().toISOString()} ${args.join(" ")}\n`);
-  } catch {
-    /* ignore */
+  const line = `${new Date().toISOString()} ${args.join(" ")}\n`;
+  for (const file of logTargets()) {
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.appendFileSync(file, line);
+    } catch {
+      /* 安装目录不可写时忽略 */
+    }
   }
 }
 
-process.on("uncaughtException", (error) => log("uncaughtException", error?.stack ?? String(error)));
+process.on("uncaughtException", (error) => {
+  log("uncaughtException", error?.stack ?? String(error));
+  try {
+    dialog.showErrorBox("playGo 启动失败", String(error?.stack ?? error));
+  } catch {
+    /* 没有 GUI 时忽略 */
+  }
+});
 process.on("unhandledRejection", (error) =>
   log("unhandledRejection", error?.stack ?? String(error)),
 );
+
+app.setName("playGo");
+app.disableHardwareAcceleration();
 
 log("boot", process.argv.join(" "));
 log("appPath", app.getAppPath());
@@ -219,6 +241,7 @@ if (!locked) {
   });
 
   app.whenReady().then(async () => {
+    app.setAppUserModelId("com.playgo.app");
     log("whenReady", "version", app.getVersion(), "packaged", String(app.isPackaged));
     Menu.setApplicationMenu(null);
     try {
