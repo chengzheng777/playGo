@@ -162,6 +162,9 @@ if (updateUrl) {
   config.extraResources.push({ from: updateConfig, to: "app-update.yml" });
   console.log(`  自动更新源：${updateUrl}`);
 } else {
+  // 显式关闭发布配置，避免 electron-builder 从 git remote 自动推断 GitHub
+  // 更新源（私有仓库会导致客户端检查更新时报错）。
+  config.publish = null;
   console.log("  未设置 PLAYGO_UPDATE_URL：本次不生成自动更新清单，安装后也不会自动更新");
 }
 
