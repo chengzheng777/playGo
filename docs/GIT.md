@@ -242,5 +242,5 @@ Dependabot 分支形如 `dependabot/npm_and_yarn/...`，是分支命名规范的
 
 - PR 标题由 Dependabot 生成，必须保持 `chore(deps): ...` / `chore(ci): ...`；
 - patch/minor 由 auto-merge 在 CI 通过后合并；
-- major 不自动合并，必须人工 review；
-- 过期的 Dependabot PR 直接关闭，让机器人按最新分组重新生成。
+- major 默认在 `.github/dependabot.yml` 里 ignore，需要时手动升级并单独开 PR；
+- 过期的 Dependabot PR 直接关闭，避免占着 Open 列表。

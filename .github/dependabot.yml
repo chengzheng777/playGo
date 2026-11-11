@@ -13,10 +13,20 @@ updates:
       prefix: "chore(deps)"
       include: scope
     groups:
-      # patch/minor 合成一个 PR，减少噪音；major 仍然单独提，方便评估破坏性变更
+      # patch/minor 合成一个 PR，减少噪音；major 走手动升级
       npm-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+    ignore:
+      # 这些 major 需要专门迁移/验证，不希望机器人反复开 PR
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitejs/plugin-react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "zod"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: "/"
@@ -28,6 +38,9 @@ updates:
     commit-message:
       prefix: "chore(ci)"
     groups:
-      # Actions 的版本升级通常是一组相关的 runtime 变更，合成一个 PR 方便一起看
+      # Actions 的 minor/patch 合成一个 PR；major 手动升级
       github-actions:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
