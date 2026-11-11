@@ -8,6 +8,9 @@ export const PROTOCOL_VERSION = 1;
 export const MAX_PLAYERS = 8;
 export const MAX_NAME_LEN = 16;
 export const MAX_CHAT_LEN = 200;
+/** 你画我猜自定义词库上限 */
+export const MAX_DRAW_WORDS = 200;
+export const MAX_DRAW_WORD_LEN = 20;
 
 /** 去掉了 0 O 1 I，避免手输与念读混淆 */
 export const ROOM_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -94,9 +97,20 @@ export interface DrawSettings {
   roundsPerPlayer: number;
   /** 每轮多少秒 */
   roundSeconds: number;
+  /** 房主添加的词语，追加到内置词库；空数组表示只用内置词库 */
+  customWords: string[];
 }
 
-export const DEFAULT_DRAW_SETTINGS: DrawSettings = { roundsPerPlayer: 1, roundSeconds: 80 };
+export const DEFAULT_DRAW_SETTINGS: DrawSettings = {
+  roundsPerPlayer: 1,
+  roundSeconds: 80,
+  customWords: [],
+};
+
+/** 客户端改规则时可以只带轮数/时长，自定义词保持不变 */
+export type DrawSettingsPatch = Omit<DrawSettings, "customWords"> & {
+  customWords?: string[];
+};
 
 export type YiyuMode = "talk" | "act" | "lip" | "rush";
 export type YiyuTeamId = "A" | "B";
@@ -225,6 +239,25 @@ export interface DrawGuessView {
   name: string;
   text: string;
   ok: boolean;
+  /** 答对时本轮获得的分数；答错没有 */
+  points?: number;
+}
+
+export interface DrawGuesserView {
+  playerId: string;
+  name: string;
+  /** 本轮猜对获得的分数 */
+  points: number;
+}
+
+export interface DrawResultView {
+  word: string;
+  /** 本轮按猜对顺序排列的猜词者 */
+  guessers: DrawGuesserView[];
+  /** 本轮所有猜词者都答对了 */
+  allCorrect: boolean;
+  /** 画手本轮得分（每有一人猜对 +1；全员猜对为 0） */
+  drawerPoints: number;
 }
 
 export interface DrawView {
@@ -239,7 +272,11 @@ export interface DrawView {
   scores: DrawPlayerView[];
   strokes: DrawStroke[];
   guesses: DrawGuessView[];
-  result?: { word: string; guesserName?: string; points?: number };
+  /** 本轮需要猜对的总人数（画手以外） */
+  guesserCount: number;
+  /** 本轮已猜对的玩家，按猜对顺序 */
+  correctGuessers: DrawGuesserView[];
+  result?: DrawResultView;
   lastEvent: { id: number; text: string } | null;
 }
 
@@ -307,6 +344,7 @@ export type ErrorCode =
   | "BAD_PHASE"
   | "NOT_HOST"
   | "RATE_LIMITED"
+  | "KICKED"
   | "REPLACED"
   | "INTERNAL";
 
@@ -328,11 +366,12 @@ export type ClientMessage =
   | (Envelope & { type: "room.leave"; data: Record<string, never> })
   | (Envelope & { type: "player.ready"; data: { ready: boolean } })
   | (Envelope & { type: "player.update"; data: { name?: string; avatar?: Avatar } })
+  | (Envelope & { type: "player.kick"; data: { playerId: string } })
   | (Envelope & { type: "chat.send"; data: { text: string } })
   | (Envelope & { type: "game.select"; data: { gameId: string } })
   | (Envelope & {
       type: "game.settings";
-      data: { settings?: YiyuSettings; draw?: DrawSettings };
+      data: { settings?: YiyuSettings; draw?: DrawSettingsPatch };
     })
   | (Envelope & { type: "game.start"; data: Record<string, never> })
   | (Envelope & { type: "game.action"; data: { action: GameAction } })

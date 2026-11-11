@@ -285,6 +285,8 @@ export function DrawGameView() {
   const remaining = Math.max(0, game.deadline - now);
   const seconds = Math.ceil(remaining / 1000);
   const scores = [...game.scores].sort((a, b) => b.score - a.score || a.timeMs - b.timeMs);
+  const myGuess = game.correctGuessers.find((item) => item.playerId === you.id);
+  const guessed = Boolean(myGuess);
 
   function sendStroke(strokeId: string, points: DrawPoint[], start: boolean) {
     store.gameAction({ type: "stroke", strokeId, points, color, width, start });
@@ -304,6 +306,11 @@ export function DrawGameView() {
         <span className="draw-round">
           第 {game.round} / {game.totalRounds} 轮
         </span>
+        {game.phase === "draw" && game.guesserCount > 0 && (
+          <span className="draw-progress">
+            已猜对 {game.correctGuessers.length}/{game.guesserCount}
+          </span>
+        )}
         <span className={`status status-${state.conn}`}>
           <i />
           {CONN_LABEL[state.conn] ?? state.conn}
@@ -333,7 +340,13 @@ export function DrawGameView() {
       <main className="draw-main">
         <div className="draw-head">
           <div className="draw-who">
-            <span className="draw-label">{game.phase === "ended" ? "本局结束" : "正在画"}</span>
+            <span className="draw-label">
+              {game.phase === "ended"
+                ? "本局结束"
+                : game.phase === "reveal"
+                  ? "本轮画手"
+                  : "正在画"}
+            </span>
             <b>{game.drawerName || "—"}</b>
           </div>
           {game.phase === "draw" && (
@@ -342,7 +355,11 @@ export function DrawGameView() {
           {game.phase === "reveal" && game.result && (
             <div className="draw-answer">
               答案：<b>{game.result.word}</b>
-              {game.result.guesserName && <span> · {game.result.guesserName} 猜对</span>}
+              <span className="draw-answer-meta">
+                {game.result.allCorrect
+                  ? " · 全员猜对"
+                  : ` · ${game.result.guessers.length}/${game.guesserCount} 人猜对`}
+              </span>
             </div>
           )}
         </div>
@@ -403,7 +420,11 @@ export function DrawGameView() {
           </>
         )}
 
-        {!isHost && !isDrawer && game.phase === "draw" && (
+        {!isHost && !isDrawer && game.phase === "draw" && guessed && (
+          <p className="draw-guessed">你已猜对（+{myGuess?.points ?? 0}），等其他人继续</p>
+        )}
+
+        {!isHost && !isDrawer && game.phase === "draw" && !guessed && (
           <form
             className="draw-guess"
             style={
@@ -440,9 +461,22 @@ export function DrawGameView() {
                 className={`draw-guess-item${item.ok ? " ok" : ""}`}
               >
                 <b>{item.name}</b>：{item.text}
-                {item.ok ? " ✓" : ""}
+                {item.ok ? ` ✓ +${item.points ?? 0}` : ""}
               </span>
             ))}
+          </div>
+        )}
+
+        {game.phase === "reveal" && game.result && game.result.guessers.length > 0 && (
+          <div className="draw-correct">
+            {game.result.guessers.map((guesser) => (
+              <span key={guesser.playerId} className="draw-correct-item">
+                <b>{guesser.name}</b> +{guesser.points}
+              </span>
+            ))}
+            {game.result.drawerPoints > 0 && (
+              <span className="draw-correct-item drawer">画手 +{game.result.drawerPoints}</span>
+            )}
           </div>
         )}
 
