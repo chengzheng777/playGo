@@ -243,6 +243,24 @@ class Store {
     this.send({ v: 1, type: "player.ready", data: { ready: !you.ready } });
   }
 
+  /** 房主移出单个玩家（仅大厅生效） */
+  kickPlayer(playerId: string): void {
+    const { room, you } = this.state;
+    if (!room || !you || room.hostId !== you.id) return;
+    if (playerId === room.hostId || playerId === you.id) return;
+    this.send({ v: 1, type: "player.kick", data: { playerId } });
+  }
+
+  /** 房主一键移出所有未准备的非房主玩家（仅大厅生效） */
+  kickUnready(): void {
+    const { room, you } = this.state;
+    if (!room || !you || room.hostId !== you.id) return;
+    for (const player of room.players) {
+      if (player.id === room.hostId || player.ready) continue;
+      this.send({ v: 1, type: "player.kick", data: { playerId: player.id } });
+    }
+  }
+
   /** 保存本机用户资料；在房间里则同步给其他人 */
   saveProfile(profile: Profile): void {
     const clean: Profile = {
@@ -418,10 +436,11 @@ class Store {
       this.scheduleReconnect();
       return;
     }
+    // 保留已经提示的错误（例如被房主移出房间），不要在连接关闭时立刻清掉
     this.set({
       conn: "closed",
       busy: false,
-      error: this.state.busy ? "连不上本地服务，确认服务已经启动" : null,
+      error: this.state.error ?? (this.state.busy ? "连不上本地服务，确认服务已经启动" : null),
     });
   }
 
@@ -562,7 +581,7 @@ class Store {
   }
 
   private onError(code: ErrorCode, text: string): void {
-    const sessionGone = code === "ROOM_NOT_FOUND" || code === "BAD_TOKEN";
+    const sessionGone = code === "ROOM_NOT_FOUND" || code === "BAD_TOKEN" || code === "KICKED";
 
     if (sessionGone && this.state.view === "lobby") {
       this.session = null;
@@ -574,7 +593,7 @@ class Store {
         chat: [],
         busy: false,
         conn: "closed",
-        error: `${text}，请重新创建房间`,
+        error: code === "KICKED" ? text : `${text}，请重新创建房间`,
         gameId: null,
         settings: { ...DEFAULT_SETTINGS },
         drawSettings: { ...DEFAULT_DRAW_SETTINGS },

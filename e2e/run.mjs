@@ -155,6 +155,55 @@ async function clickByText(client, text) {
   );
 }
 
+async function typeInto(client, selector, text) {
+  return evaluate(
+    client,
+    `(() => {
+      const input = document.querySelector(${JSON.stringify(selector)});
+      if (!input) return false;
+      const proto = input.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
+      setter.call(input, ${JSON.stringify(text)});
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      return true;
+    })()`,
+  );
+}
+
+async function noHorizontalOverflow(client) {
+  return (
+    (await evaluate(client, "document.documentElement.scrollWidth <= window.innerWidth + 1")) ===
+    true
+  );
+}
+
+async function joinAsPhone(port, pages, code, name, avatar, metrics, ready = true) {
+  const page = await newPage(port, metrics);
+  pages.push(page);
+  await page.call("Page.navigate", { url: BASE });
+  await waitFor(page, "!!document.querySelector('.home')");
+  await evaluate(
+    page,
+    `localStorage.setItem("playgo:profile", JSON.stringify({ name: ${JSON.stringify(
+      name,
+    )}, avatar: ${JSON.stringify(avatar)} }))`,
+  );
+  await page.call("Page.navigate", { url: `${BASE}/j/${code}` });
+  await waitFor(page, "!!document.querySelector('.join-user')");
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    await click(page, ".panel .btn-primary");
+    await sleep(600);
+    if (await evaluate(page, "!!document.querySelector('.current-game')")) break;
+  }
+
+  if (ready) {
+    await click(page, ".current-game .btn");
+    await waitFor(page, "!!document.querySelector('.tag-ready')");
+  }
+  return page;
+}
+
 async function newPage(port, metrics) {
   const created = await fetch(`http://127.0.0.1:${port}/json/new?url=about:blank`, {
     method: "PUT",
@@ -169,6 +218,283 @@ async function newPage(port, metrics) {
 async function screenshot(client, name) {
   const result = await client.call("Page.captureScreenshot", { format: "png" });
   fs.writeFileSync(path.join(ARTIFACTS, `${name}.png`), Buffer.from(result.result.data, "base64"));
+}
+
+async function runMobileFlow(port, pages) {
+  console.log("\n移动端尺寸");
+
+  const host = await newPage(port, {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 2,
+    mobile: true,
+  });
+  pages.push(host);
+  await host.call("Page.navigate", { url: BASE });
+  await waitFor(host, "!!document.querySelector('.home')");
+  await evaluate(
+    host,
+    `localStorage.setItem("playgo:profile", JSON.stringify({ name: "MobileHost", avatar: { text: "M", color: "#fb7185" } }))`,
+  );
+  await host.call("Page.navigate", { url: BASE });
+  await waitFor(host, "!!document.querySelector('.home')");
+  await sleep(300);
+
+  await clickByText(host, "创建房间");
+  check(
+    "移动端房主打开创建弹窗",
+    Boolean(await waitFor(host, "!!document.querySelector('.modal')")),
+  );
+  await evaluate(
+    host,
+    "[...document.querySelectorAll('.game-pill')].find((el) => el.textContent.includes('你画我猜'))?.click()",
+  );
+  await clickByText(host, "创建「你画我猜」");
+  const code = await waitFor(host, "document.querySelector('.room-code b')?.textContent ?? null");
+  check("移动端房主创建你画我猜房间", Boolean(code), String(code));
+
+  await waitFor(host, "!!document.querySelector('.word-batch')");
+  await typeInto(host, ".word-batch", "移动词甲，移动词乙\n移动词丙");
+  await clickByText(host, "加入词库");
+  check(
+    "移动端自定义词库可批量添加",
+    Boolean(await waitFor(host, "document.querySelectorAll('.word-chip').length >= 3")),
+  );
+  check("移动端房主大厅无横向溢出", await noHorizontalOverflow(host));
+
+  const phoneMetrics = { width: 390, height: 844, deviceScaleFactor: 2, mobile: true };
+  const kickMe = await joinAsPhone(
+    port,
+    pages,
+    code,
+    "KickMe",
+    { text: "K", color: "#94a3b8" },
+    phoneMetrics,
+    false,
+  );
+  const a = await joinAsPhone(
+    port,
+    pages,
+    code,
+    "MobileA",
+    { text: "A", color: "#38bdf8" },
+    phoneMetrics,
+  );
+  const b = await joinAsPhone(
+    port,
+    pages,
+    code,
+    "MobileB",
+    { text: "B", color: "#f97316" },
+    { width: 360, height: 800, deviceScaleFactor: 2, mobile: true },
+  );
+  const c = await joinAsPhone(
+    port,
+    pages,
+    code,
+    "MobileC",
+    { text: "C", color: "#a78bfa" },
+    { width: 320, height: 568, deviceScaleFactor: 2, mobile: true },
+  );
+
+  await waitFor(host, "document.querySelectorAll('.player').length >= 5");
+  check(
+    "移动端玩家列表有移出按钮",
+    (await evaluate(host, "document.querySelectorAll('.kick-btn').length")) >= 4,
+  );
+  check(
+    "移动端出现未准备批量移出",
+    Boolean(
+      await waitFor(
+        host,
+        "[...document.querySelectorAll('button')].some((el) => el.textContent.includes('移出未准备玩家'))",
+      ),
+    ),
+  );
+  check("移动端多人房间无横向溢出", await noHorizontalOverflow(host));
+
+  // 房主在 320 小屏也要能完整看到玩家列表、移出按钮和自定义词设置
+  await host.call("Emulation.setDeviceMetricsOverride", {
+    width: 320,
+    height: 568,
+    deviceScaleFactor: 2,
+    mobile: true,
+  });
+  await sleep(300);
+  check("移动端 320 房主大厅无横向溢出", await noHorizontalOverflow(host));
+  await evaluate(
+    host,
+    "document.querySelector('.players-panel')?.scrollIntoView({ block: 'center' })",
+  );
+  await screenshot(host, "e2e-mobile-lobby-320");
+  await host.call("Emulation.setDeviceMetricsOverride", {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 2,
+    mobile: true,
+  });
+  await sleep(300);
+
+  await evaluate(host, "window.confirm = () => true");
+  await clickByText(host, "移出未准备玩家");
+  check(
+    "移动端一键移出未准备玩家",
+    Boolean(await waitFor(host, "document.querySelectorAll('.player').length === 4")),
+  );
+  check(
+    "移动端被移出玩家回首页",
+    Boolean(await waitFor(kickMe, "!!document.querySelector('.home')")),
+  );
+  check(
+    "移动端被移出玩家看到提示",
+    Boolean(
+      await waitFor(kickMe, "document.querySelector('.toast')?.textContent.includes('移出')"),
+    ),
+  );
+
+  check(
+    "移动端玩家能看到自定义词",
+    (await evaluate(a, "document.querySelectorAll('.word-chip').length")) >= 3,
+  );
+  for (const [page, label] of [
+    [a, "390"],
+    [b, "360"],
+    [c, "320"],
+  ]) {
+    check(`移动端 ${label} 大厅无横向溢出`, await noHorizontalOverflow(page));
+  }
+
+  await clickByText(host, "开始游戏");
+  check(
+    "移动端开始你画我猜",
+    Boolean(await waitFor(host, "!!document.querySelector('.draw-game')")),
+  );
+
+  const players = [a, b, c];
+  for (const page of players) await waitFor(page, "!!document.querySelector('.draw-game')");
+  await sleep(300);
+
+  const drawerFlags = await Promise.all(
+    players.map((page) => evaluate(page, "!!document.querySelector('.draw-pad')")),
+  );
+  const drawerPage = players.find((_, index) => drawerFlags[index]);
+  const guesserPages = players.filter((_, index) => !drawerFlags[index]);
+  check("移动端找到画手与猜词者", Boolean(drawerPage) && guesserPages.length === 2);
+  if (!drawerPage) return;
+
+  const word = await evaluate(
+    drawerPage,
+    "document.querySelector('.draw-word')?.textContent.replace('你要画：', '').trim() ?? ''",
+  );
+  check("移动端画手能看到词", word.length > 0, word);
+  check("移动端画布无横向溢出", await noHorizontalOverflow(drawerPage));
+
+  // 360 / 320 宽度下聊天面板都要完整落在视口内
+  for (const [page, label] of [
+    [b, "360"],
+    [c, "320"],
+  ]) {
+    // 后台标签页会暂停 CSS 过渡，量尺寸前先切到前台
+    await page.call("Page.bringToFront");
+    await sleep(120);
+    await click(page, ".game-chat-toggle");
+    await waitFor(page, "!!document.querySelector('.game-chat.open')");
+    // 等展开动画结束再量尺寸，避免量到 translateX 中间态
+    await sleep(320);
+    const fits = await evaluate(
+      page,
+      `(() => {
+        const el = document.querySelector('.game-chat.open');
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        return rect.left >= 0 && rect.right <= window.innerWidth + 1 &&
+          rect.top >= 0 && rect.bottom <= window.innerHeight + 1;
+      })()`,
+    );
+    check(`移动端 ${label} 聊天面板在视口内`, fits === true);
+    check(`移动端 ${label} 聊天无横向溢出`, await noHorizontalOverflow(page));
+    await click(page, ".game-chat-toggle");
+  }
+
+  await drawerPage.call("Page.bringToFront");
+  await sleep(120);
+  await click(drawerPage, ".game-chat-toggle");
+  await waitFor(drawerPage, "!!document.querySelector('.game-chat.open')");
+  await typeInto(drawerPage, ".game-chat-form .input", "移动端公屏消息");
+  await evaluate(drawerPage, "document.querySelector('.game-chat-form')?.requestSubmit()");
+
+  const receiver = guesserPages[0];
+  check(
+    "移动端聊天未读数",
+    Boolean(await waitFor(receiver, "!!document.querySelector('.game-chat-badge')")),
+  );
+  await receiver.call("Page.bringToFront");
+  await sleep(120);
+  await click(receiver, ".game-chat-toggle");
+  check(
+    "移动端聊天可展开",
+    Boolean(await waitFor(receiver, "!!document.querySelector('.game-chat.open')")),
+  );
+  check(
+    "移动端聊天收到消息",
+    Boolean(
+      await waitFor(
+        receiver,
+        "[...document.querySelectorAll('.game-chat.open .msg-text')].some((el) => el.textContent.includes('移动端公屏消息'))",
+      ),
+    ),
+  );
+  check("移动端聊天无横向溢出", await noHorizontalOverflow(receiver));
+  await sleep(320);
+  await screenshot(receiver, "e2e-mobile-chat");
+  await click(receiver, ".game-chat-toggle");
+  await click(drawerPage, ".game-chat-toggle");
+
+  const first = guesserPages[0];
+  const second = guesserPages[1];
+  await typeInto(first, ".draw-guess .input", word);
+  await evaluate(first, "document.querySelector('.draw-guess')?.requestSubmit()");
+  check(
+    "移动端首位猜对后本轮继续",
+    Boolean(
+      await waitFor(host, "document.querySelector('.draw-progress')?.textContent.includes('1/2')"),
+    ),
+  );
+  check(
+    "移动端猜对等待提示",
+    Boolean(await waitFor(first, "!!document.querySelector('.draw-guessed')")),
+  );
+
+  await typeInto(second, ".draw-guess .input", word);
+  await evaluate(second, "document.querySelector('.draw-guess')?.requestSubmit()");
+  check(
+    "移动端全员猜对进入揭晓",
+    Boolean(await waitFor(host, "!!document.querySelector('.draw-correct')")),
+  );
+  const correctText = await evaluate(
+    host,
+    "document.querySelector('.draw-correct')?.textContent ?? ''",
+  );
+  check(
+    "移动端按顺序显示 5 / 3 分",
+    correctText.includes("+5") && correctText.includes("+3"),
+    correctText,
+  );
+  const drawerScore = await evaluate(
+    host,
+    "document.querySelector('.draw-player.drawer b')?.textContent ?? ''",
+  );
+  check("移动端全员猜对画手 0 分", drawerScore === "0", drawerScore);
+
+  for (const [page, label] of [
+    [host, "大屏"],
+    [first, "猜词者1"],
+    [second, "猜词者2"],
+  ]) {
+    check(`移动端 ${label} 揭晓无横向溢出`, await noHorizontalOverflow(page));
+  }
+  await screenshot(host, "e2e-mobile-draw-reveal");
+  await screenshot(second, "e2e-mobile-draw-reveal-phone");
 }
 
 async function main() {
@@ -194,6 +520,7 @@ async function main() {
     { stdio: "ignore" },
   );
 
+  const pages = [];
   let host;
   let phone;
   let guest;
@@ -206,6 +533,7 @@ async function main() {
       deviceScaleFactor: 1,
       mobile: false,
     });
+    pages.push(host);
     await host.call("Page.navigate", { url: BASE });
     await waitFor(host, "!!document.querySelector('.game-card')");
     await evaluate(
@@ -241,6 +569,7 @@ async function main() {
       deviceScaleFactor: 2,
       mobile: true,
     });
+    pages.push(phone);
     await phone.call("Page.navigate", { url: BASE });
     await waitFor(phone, "!!document.querySelector('.game-card')");
     await evaluate(
@@ -285,6 +614,34 @@ async function main() {
       (await evaluate(phone, "!document.querySelector('.phone-arena .word')")) === true,
     );
 
+    guest.send(JSON.stringify({ v: 1, type: "chat.send", data: { text: "e2e 对局聊天" } }));
+    check(
+      "对局中有聊天入口",
+      Boolean(await waitFor(host, "!!document.querySelector('.game-chat-toggle')")),
+    );
+    check(
+      "对局聊天未读数",
+      Boolean(await waitFor(host, "!!document.querySelector('.game-chat-badge')")),
+    );
+    await click(host, ".game-chat-toggle");
+    check(
+      "对局聊天可以展开",
+      Boolean(await waitFor(host, "!!document.querySelector('.game-chat.open')")),
+    );
+    check(
+      "展开后未读数清零",
+      (await evaluate(host, "!document.querySelector('.game-chat-badge')")) === true,
+    );
+    check(
+      "对局聊天收到消息",
+      Boolean(
+        await waitFor(
+          host,
+          "[...document.querySelectorAll('.game-chat.open .msg-text')].some((el) => el.textContent.includes('e2e 对局聊天'))",
+        ),
+      ),
+    );
+
     await click(host, ".turn-actions .btn-primary");
     check(
       "答对后手机进入揭晓",
@@ -294,11 +651,12 @@ async function main() {
     await screenshot(host, "e2e-host");
     await screenshot(phone, "e2e-phone");
 
+    await runMobileFlow(port, pages);
+
     console.log(`\n通过 ${passed} 项，失败 ${failures.length} 项`);
     if (failures.length > 0) process.exitCode = 1;
   } finally {
-    phone?.close();
-    host?.close();
+    for (const page of pages) page.close();
     guest?.close();
     chrome.kill();
   }

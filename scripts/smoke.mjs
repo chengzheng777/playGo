@@ -385,11 +385,21 @@ async function main() {
 
   host.send("game.select", { gameId: "draw" });
   await host.next((m) => m.type === "room.state" && m.data.gameId === "draw");
-  host.send("game.settings", { draw: { roundsPerPlayer: 2, roundSeconds: 60 } });
+  host.send("game.settings", {
+    draw: {
+      roundsPerPlayer: 2,
+      roundSeconds: 60,
+      customWords: ["自定义甲", "自定义乙"],
+    },
+  });
   const drawSettingsState = await host.next(
     (m) => m.type === "room.state" && m.data.drawSettings?.roundsPerPlayer === 2,
   );
-  check("你画我猜规则可设置", drawSettingsState?.data.drawSettings.roundSeconds === 60);
+  check(
+    "你画我猜规则可设置",
+    drawSettingsState?.data.drawSettings.roundSeconds === 60 &&
+      drawSettingsState?.data.drawSettings.customWords.length === 2,
+  );
   host.send("game.start", {});
 
   const drawHost = await host.next((m) => m.type === "room.state" && m.data.draw?.phase === "draw");
@@ -405,6 +415,12 @@ async function main() {
   const drawerEntry = entries.find((entry) => entry.view.draw.drawerId === entry.view.you.id);
   const drawOther = entries.find((entry) => entry !== drawerEntry);
   check("画手能看到词", typeof drawerEntry?.view.draw.word === "string");
+
+  guest2.send("chat.send", { text: "对局里也能聊" });
+  const drawChat = await host.next(
+    (m) => m.type === "chat.message" && m.data.text === "对局里也能聊",
+  );
+  check("对局中聊天广播", drawChat.data.text === "对局里也能聊");
 
   drawerEntry?.client.send("game.action", {
     action: {
@@ -432,10 +448,81 @@ async function main() {
   );
   check("猜对后揭晓答案", drawReveal.data.draw.result?.word === drawWord);
   check(
-    "得分带上速度加成与用时",
-    (drawReveal.data.draw.result?.points ?? 0) >= 10 &&
-      (drawReveal.data.draw.scores[0]?.timeMs ?? 0) >= 0,
+    "首位猜对按 5 分",
+    drawReveal.data.draw.result?.guessers?.[0]?.points === 5 ||
+      drawReveal.data.draw.scores.some((player) => player.score === 5),
   );
+  check(
+    "全员猜对画手 0 分",
+    drawReveal.data.draw.result?.allCorrect === true &&
+      drawReveal.data.draw.result?.drawerPoints === 0 &&
+      drawReveal.data.draw.scores
+        .filter((player) => player.isDrawer)
+        .every((player) => player.score === 0),
+  );
+
+  host.send("player.kick", { playerId: bobDraw.data.you.id });
+  const drawKickDenied = await host.next((m) => m.type === "error");
+  check("游戏进行中不能踢人", drawKickDenied.data.code === "BAD_PHASE");
+
+  // ---- 房主踢人 ----
+  console.log("\n房间管理");
+  const kickHost = new Client("踢人房主");
+  await kickHost.connect();
+  kickHost.send("room.create", { name: "KickHost", role: "screen" });
+  const kickCreated = await kickHost.next((m) => m.type === "room.created");
+  const kickCode = kickCreated.data.room.code;
+
+  const kickA = new Client("未准备玩家");
+  await kickA.connect();
+  kickA.send("room.join", { code: kickCode, name: "KickA", role: "player" });
+  const kickAState = await kickA.next(
+    (m) => m.type === "room.state" && m.data.you.name === "KickA",
+  );
+
+  const kickB = new Client("准备玩家");
+  await kickB.connect();
+  kickB.send("room.join", { code: kickCode, name: "KickB", role: "player" });
+  await kickB.next((m) => m.type === "room.state" && m.data.you.name === "KickB");
+  kickB.send("player.ready", { ready: true });
+  await kickHost.next(
+    (m) =>
+      m.type === "room.state" && m.data.room.players.some((p) => p.name === "KickB" && p.ready),
+  );
+
+  kickB.send("player.kick", { playerId: kickAState.data.you.id });
+  const notHostKick = await kickB.next((m) => m.type === "error");
+  check("非房主不能踢人", notHostKick.data.code === "NOT_HOST");
+
+  kickHost.send("player.kick", { playerId: kickAState.data.you.id });
+  const kicked = await kickA.next((m) => m.type === "error");
+  check("被踢玩家收到 KICKED", kicked.data.code === "KICKED");
+  const afterKick = await kickHost.next(
+    (m) =>
+      m.type === "room.state" &&
+      m.data.room.players.length === 2 &&
+      m.data.room.players.some((p) => p.name === "KickB"),
+  );
+  check(
+    "踢人后玩家列表更新",
+    afterKick.data.room.players.every((p) => p.name !== "KickA"),
+  );
+
+  const kickRejoin = new Client("被踢重连");
+  await kickRejoin.connect();
+  kickRejoin.send("room.join", {
+    code: kickCode,
+    name: "KickA",
+    role: "player",
+    token: kickAState.data.token,
+  });
+  const rejoinDenied = await kickRejoin.next((m) => m.type === "error");
+  check("被踢后旧 token 失效", rejoinDenied.data.code === "BAD_TOKEN");
+
+  kickHost.close();
+  kickB.close();
+  kickA.close();
+  kickRejoin.close();
 
   host.close();
   guest2.close();
