@@ -165,7 +165,7 @@ Closes #123
 - 关联 spec：`specs/NNN-*.md`；
 - 涉及协议的 PR 必须跑 `pnpm smoke`；
 - 涉及 UI 的 PR 尽量跑 `pnpm e2e`；
-- 至少 1 人 review，所有对话解决后才能合并；
+- 有协作者时至少 1 人 review；单人仓库可 0 人，但仍需 PR + CI；所有对话解决后才能合并；
 - 只允许 **Squash merge**，合并后删除分支；
 - 不要用 merge commit，不要 force push `main`。
 
