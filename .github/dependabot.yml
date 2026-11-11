@@ -5,12 +5,29 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Shanghai
     open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
     groups:
-      dev-dependencies:
-        dependency-type: development
+      # patch/minor 合成一个 PR，减少噪音；major 仍然单独提，方便评估破坏性变更
+      npm-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: monthly
+      time: "09:10"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      # Actions 的版本升级通常是一组相关的 runtime 变更，合成一个 PR 方便一起看
+      github-actions:
+        patterns: ["*"]
