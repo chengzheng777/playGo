@@ -1,0 +1,17 @@
+---
+description: SDD workflow and repository conventions
+alwaysApply: true
+---
+
+# playGo SDD Rules
+
+Read `AGENTS.md` first. This repository uses Spec-Driven Development.
+
+- Before changing behavior, create or update `specs/NNN-*.md` with observable behavior and testable acceptance criteria.
+- Update `shared/protocol.ts` and `docs/PROTOCOL.md` when messages change.
+- Game rules belong in `server/`; the client only renders and sends intents.
+- Validate external input with zod; never trust client fields.
+- Keep private data per-player (words, hands, photos).
+- Add tests in `tests/*.test.ts`; protocol smoke in `scripts/smoke.mjs`; UI in `e2e/run.mjs`.
+- Run `pnpm verify`; run `pnpm smoke` when the protocol changes.
+- Do not edit `dist/`, `release/`, `electron/app/`, or commit secrets.

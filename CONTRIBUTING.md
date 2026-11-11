@@ -1,5 +1,7 @@
 # 贡献指南
 
+> 使用 AI 编码工具（Codex / Claude Code / Cursor / Copilot 等）时，先读 [AGENTS.md](AGENTS.md)；它不替代本文件。
+
 ## 项目结构
 
 ```
@@ -8,7 +10,9 @@ shared/    前后端共享的协议类型、游戏目录、头像工具
 src/       浏览器端（React）
 specs/     规格（SDD）：先写清行为与验收，再写实现
 docs/      设计、协议、打包等技术文档
-scripts/   规则与协议冒烟测试
+scripts/   协议冒烟、打包与部署辅助脚本
+tests/     Vitest 单元测试
+e2e/       真浏览器端到端测试
 ```
 
 ## 开发流程（SDD）
@@ -16,7 +20,7 @@ scripts/   规则与协议冒烟测试
 1. **写规格**：新增功能先建 `specs/NNN-name.md`（复制 `specs/TEMPLATE.md`）。
 2. **改协议**：涉及消息/接口时同步 `docs/PROTOCOL.md`，类型放 `shared/protocol.ts`。
 3. **写实现**：服务端规则放 `server/games/`，客户端视图放 `src/views/`。
-4. **补测试**：纯规则写进 `scripts/engine-smoke.ts`；协议流程写进 `scripts/smoke.mjs`。
+4. **补测试**：纯规则写进 `tests/*.test.ts`（Vitest）；协议流程写进 `scripts/smoke.mjs`；UI 流程写进 `e2e/run.mjs`。
 5. **过检查**：`pnpm verify` + `pnpm smoke`（需要本地服务）。
 6. **更新记录**：用户可见的变更写进 `CHANGELOG.md`。
 
@@ -74,5 +78,7 @@ chore(release): v0.2.0
 
 ## 分支与版本
 
-- 当前为 trunk-based：直接在 `main` 小步提交。
+- 当前为 trunk-based：维护者可以直接在 `main` 小步提交。
+- 外部贡献者请 fork → 功能分支 → Pull Request，不要在 PR 里混入无关改动。
+- PR 需要 CI（`pnpm verify`、覆盖率、smoke、e2e）通过；建议至少一名维护者 review 后再 squash merge。
 - 版本遵循 SemVer；用户可见变更升 minor，修复升 patch。

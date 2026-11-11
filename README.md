@@ -230,6 +230,7 @@ scripts/           冒烟测试
 - [通信协议 v0.1](docs/PROTOCOL.md) —— WebSocket 消息定义、房间状态、游戏视图、重连与错误码
 - [规格目录](specs/README.md) —— SDD 规格：每个游戏的规则、边界与验收标准
 - [贡献指南](CONTRIBUTING.md) —— 开发流程、提交规范、完成定义
+- [AI 开发规范](AGENTS.md) —— Codex / Claude Code / Cursor / Copilot 的 SDD 指令入口
 - [打包与分发](docs/PACKAGING.md) —— 单文件 exe 方案、Electron 与 Tauri 选型
 - [远程服务版部署](docs/REMOTE.md) —— Docker + Caddy、容量、安全与扩容路线
 - [更新日志](CHANGELOG.md) —— 版本变更记录
