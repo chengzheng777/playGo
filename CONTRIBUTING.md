@@ -44,7 +44,7 @@ e2e/       真浏览器端到端测试
 
 ## 提交规范
 
-使用 Conventional Commits：
+使用 Conventional Commits，完整规则见 [docs/GIT.md](docs/GIT.md)：
 
 ```
 feat: 拍颜色
@@ -58,6 +58,7 @@ chore(release): v0.2.0
 
 - 一个提交只做一件事；格式化单独提交。
 - 提交信息写「为什么」，正文可列要点。
+- PR 标题必须符合 Conventional Commits（squash merge 后就是 main 的提交标题）。
 - 发布用 `chore(release): vX.Y.Z` 并打 annotated tag。
 
 ## 完成定义（DoD）
@@ -76,9 +77,21 @@ chore(release): v0.2.0
 - 视图按人裁剪：私密信息（词、手牌、照片）只发给该看的人。
 - 状态默认全量广播；人数少，简单优先，避免过早做增量协议。
 
-## 分支与版本
+## 分支与保护
 
-- 当前为 trunk-based：维护者可以直接在 `main` 小步提交。
-- 外部贡献者请 fork → 功能分支 → Pull Request，不要在 PR 里混入无关改动。
-- PR 需要 CI（`pnpm verify`、覆盖率、smoke、e2e）通过；建议至少一名维护者 review 后再 squash merge。
-- 版本遵循 SemVer；用户可见变更升 minor，修复升 patch。
+`main` 是受保护分支，**任何人都不能直接 push 或直接合并到 main**，包括维护者：
+
+- 从最新 `main` 拉短期分支：`<type>/<short-description>`，例如 `feat/draw-clear-button`、`fix/draw-sync`；
+- 所有改动通过 Pull Request 合并；
+- PR 需要 CI 通过；有协作者时至少 1 人 review，单人仓库可把 required approvals 设为 0，但仍必须走 PR；
+- 只允许 **Squash merge**，合并后删除分支；
+- 禁止 force push / 删除 `main`；
+- 紧急修复也走 PR，不要临时关闭保护。
+
+完整分支命名、提交流程和 GitHub 保护配置见 [docs/GIT.md](docs/GIT.md)。
+
+## 版本
+
+- 版本遵循 SemVer：用户可见变更升 minor，修复升 patch，破坏性变更升 major；
+- 发布用 annotated tag，并同步 `CHANGELOG.md`；
+- Release 由 GitHub Actions 构建，不直接改 `main` 上的版本文件后硬推。

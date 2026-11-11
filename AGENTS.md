@@ -42,11 +42,15 @@ pnpm e2e         # 真浏览器 E2E（需服务与 Chrome）
 pnpm verify      # typecheck + lint + test + build
 ```
 
-## Git
+## Git 与分支
 
-- 使用 Conventional Commits：`feat:`、`fix:`、`refactor:`、`docs:`、`test:`、`chore:`。
+完整规则见 [docs/GIT.md](docs/GIT.md)，关键约束：
+
+- `main` 受保护，**禁止直接 push / 直接合并**；所有改动走 `<type>/<short>` 分支 + PR。
+- 分支名全小写、用 `-` 分隔：`feat/`、`fix/`、`docs/`、`refactor/`、`test/`、`chore/`、`ci/`。
+- 使用 Conventional Commits；PR 标题也必须符合，squash 后即 main 的提交标题。
 - 一个提交只做一件事；格式化/生成物单独处理。
-- 多贡献者场景走分支 + PR；不要直接把未验证的改动推到 `main`。
+- 只允许 Squash merge；合并后删除分支；不要 force push `main`。
 - 推送前确认工作区只包含本次相关文件。
 
 ## 完成定义
