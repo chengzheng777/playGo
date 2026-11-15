@@ -35,6 +35,11 @@ export interface Player {
   ready: boolean;
   connected: boolean;
   joinedAt: number;
+  /** 大厅像素房里的位置；没走动过时为空，客户端按座位给默认站位 */
+  x?: number;
+  z?: number;
+  /** 朝向弧度；服务端归一化到 [-π, π] */
+  facing?: number;
 }
 
 export interface Room {
@@ -58,6 +63,37 @@ export interface RoomSummary {
   capacity: number;
   phase: Phase;
   createdAt: number;
+}
+
+/**
+ * 入座页看到的公开座位，只用于画面。
+ * 不含玩家 id、token、准备状态和游戏私密数据。
+ */
+export interface RoomSeatView {
+  seat: number;
+  role: Role;
+  name: string;
+  avatar: Avatar;
+  connected: boolean;
+  /** 仅大厅像素房使用：客户端拼的座位视图会带 id/准备/位置 */
+  id?: string;
+  ready?: boolean;
+  x?: number;
+  z?: number;
+  facing?: number;
+}
+
+/** GET /api/rooms/:code 的公开房态；seats 下标即座位号，空位为 null */
+export interface RoomPreview {
+  code: string;
+  phase: Phase;
+  maxPlayers: number;
+  hostPlays: boolean;
+  /** 房主所在座位；-1 表示房主不在桌上（例如刚被提升为大屏） */
+  hostSeat: number;
+  host: { name: string; avatar: Avatar };
+  gameId: string | null;
+  seats: (RoomSeatView | null)[];
 }
 
 export interface ChatMessage {
@@ -363,10 +399,21 @@ export type ClientMessage =
     })
   | (Envelope & {
       type: "room.join";
-      data: { code: string; name?: string; role?: Role; token?: string; avatar?: Avatar };
+      data: {
+        code: string;
+        name?: string;
+        role?: Role;
+        token?: string;
+        avatar?: Avatar;
+        /** 入座页期望的座位；服务端可以改派 */
+        seat?: number;
+        /** 坐下即准备；只对 player 生效 */
+        ready?: boolean;
+      };
     })
   | (Envelope & { type: "room.leave"; data: Record<string, never> })
   | (Envelope & { type: "player.ready"; data: { ready: boolean } })
+  | (Envelope & { type: "player.move"; data: { x: number; z: number; facing?: number } })
   | (Envelope & { type: "player.update"; data: { name?: string; avatar?: Avatar } })
   | (Envelope & { type: "player.kick"; data: { playerId: string } })
   | (Envelope & { type: "room.hostplays"; data: { enabled: boolean } })
@@ -389,6 +436,11 @@ export type ServerMessage =
     }
   | { v: 1; type: "room.created"; data: { room: Room; you: Player; token: string } }
   | { v: 1; type: "room.state"; data: RoomStatePayload }
+  | {
+      v: 1;
+      type: "player.moved";
+      data: { playerId: string; x: number; z: number; facing: number };
+    }
   | { v: 1; type: "chat.message"; data: ChatMessage }
   | {
       v: 1;

@@ -110,7 +110,7 @@ export function HomeView() {
                 <button
                   className="btn btn-mini"
                   disabled={full || playing || state.busy}
-                  onClick={() => store.joinRoom(room.code, profileName)}
+                  onClick={() => store.openJoinScene(room.code)}
                 >
                   {playing ? "游戏中" : full ? "已满" : "加入"}
                 </button>
@@ -223,7 +223,7 @@ export function HomeView() {
               <button
                 className="btn"
                 disabled={code.length !== 4 || state.busy}
-                onClick={() => store.joinRoom(code, profileName)}
+                onClick={() => store.openJoinScene(code)}
               >
                 加入
               </button>
@@ -305,7 +305,7 @@ export function HomeView() {
               disabled={code.length !== 4 || state.busy}
               onClick={() => {
                 setJoinOpen(false);
-                store.joinRoom(code, profileName);
+                store.openJoinScene(code);
               }}
             >
               加入

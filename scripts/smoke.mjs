@@ -56,7 +56,7 @@ class Client {
     return this.next((m) => m.type === "welcome");
   }
 
-  next(predicate, timeout = 4000) {
+  next(predicate, timeout = 8000) {
     const index = this.messages.findIndex(predicate);
     if (index !== -1) {
       const [message] = this.messages.splice(index, 1);
@@ -73,6 +73,11 @@ class Client {
 
   send(type, data) {
     this.ws.send(JSON.stringify({ v: 1, type, data, ts: Date.now() }));
+  }
+
+  /** 清掉已经收到但还没消费的状态，避免切游戏时匹配到上一局的旧 room.state */
+  flush() {
+    this.messages = [];
   }
 
   close() {
@@ -116,6 +121,26 @@ async function main() {
   const list1 = await fetch(`${BASE}/api/rooms`).then((r) => r.json());
   const listed = list1.rooms.find((room) => room.code === code);
   check("房间出现在大厅列表", listed?.phase === "lobby" && listed.players === 1);
+
+  const previewResponse = await fetch(`${BASE}/api/rooms/${code}`);
+  const preview = await previewResponse.json();
+  check("入座预览可读", previewResponse.ok && preview.code === code);
+  check(
+    "预览座位数等于容量",
+    Array.isArray(preview.seats) && preview.seats.length === preview.maxPlayers,
+  );
+  check(
+    "房主大屏出现在预览",
+    preview.hostSeat === 0 &&
+      preview.seats[0]?.role === "screen" &&
+      preview.seats[0]?.name === "Alice",
+  );
+  check(
+    "预览不含玩家 id / token",
+    !JSON.stringify(preview).includes('"id"') && !JSON.stringify(preview).includes("token"),
+  );
+  const missingPreview = await fetch(`${BASE}/api/rooms/ZZZZ`);
+  check("不存在的房间预览返回 404", missingPreview.status === 404);
 
   const guest = new Client("玩家B");
   await guest.connect();
@@ -308,6 +333,9 @@ async function main() {
 
   // ---- UNO ----
   console.log("\nUNO");
+  host.flush();
+  guest2.flush();
+  carol.flush();
   guest2.send("player.ready", { ready: true });
   carol.send("player.ready", { ready: true });
   await host.next(
@@ -339,6 +367,9 @@ async function main() {
 
   // ---- 拍颜色 ----
   console.log("\n拍颜色");
+  host.flush();
+  guest2.flush();
+  carol.flush();
   host.send("game.back", {});
   await host.next((m) => m.type === "room.state" && m.data.room.phase === "lobby");
 
@@ -381,6 +412,9 @@ async function main() {
 
   // ---- 你画我猜 ----
   console.log("\n你画我猜");
+  host.flush();
+  guest2.flush();
+  carol.flush();
   host.send("game.back", {});
   await host.next((m) => m.type === "room.state" && m.data.room.phase === "lobby");
 
@@ -637,6 +671,124 @@ async function main() {
   hpScreen.close();
   hpScreenLate.close();
   hpScreenKick.close();
+
+  console.log("\n入座座位");
+  const seatHost = new Client("座位房主");
+  await seatHost.connect();
+  seatHost.send("room.create", { name: "SeatHost", role: "screen" });
+  const seatCreated = await seatHost.next((m) => m.type === "room.created");
+  const seatCode = seatCreated.data.room.code;
+  const seatPreview = await fetch(`${BASE}/api/rooms/${seatCode}`).then((r) => r.json());
+  check(
+    "预览显示房主大屏位",
+    seatPreview.hostSeat === 0 && seatPreview.seats[0]?.role === "screen",
+  );
+
+  const sitterA = new Client("座位A");
+  await sitterA.connect();
+  sitterA.send("room.join", {
+    code: seatCode,
+    name: "SeatA",
+    role: "player",
+    seat: 3,
+    ready: true,
+  });
+  const sitterAState = await sitterA.next((m) => m.type === "room.state");
+  check("指定座位生效", sitterAState.data.you.seat === 3);
+  check("坐下即准备", sitterAState.data.you.ready === true);
+
+  const sitterB = new Client("座位B");
+  await sitterB.connect();
+  sitterB.send("room.join", {
+    code: seatCode,
+    name: "SeatB",
+    role: "player",
+    seat: 3,
+    ready: true,
+  });
+  const sitterBState = await sitterB.next((m) => m.type === "room.state");
+  check(
+    "抢同一把椅子时改派座位",
+    sitterBState.data.you.seat !== 3 && sitterBState.data.you.ready === true,
+  );
+
+  const seatPreview2 = await fetch(`${BASE}/api/rooms/${seatCode}`).then((r) => r.json());
+  check(
+    "预览反映新座位",
+    seatPreview2.seats[3]?.name === "SeatA" &&
+      seatPreview2.seats[sitterBState.data.you.seat]?.name === "SeatB",
+  );
+
+  const sitterScreen = new Client("入座观战");
+  await sitterScreen.connect();
+  sitterScreen.send("room.join", {
+    code: seatCode,
+    name: "SeatScreen",
+    role: "spectator",
+    seat: 1,
+  });
+  const sitterScreenState = await sitterScreen.next(
+    (m) => m.type === "room.state" && m.data.you.role === "spectator",
+  );
+  check("观战大屏不占桌面座位", sitterScreenState.data.you.seat >= seatPreview2.maxPlayers);
+
+  const sitterReconnect = new Client("座位A重连");
+  await sitterReconnect.connect();
+  sitterReconnect.send("room.join", { code: seatCode, token: sitterAState.data.token });
+  const seatResumed = await sitterReconnect.next(
+    (m) => m.type === "room.state" && m.data.you.name === "SeatA",
+  );
+  check(
+    "重连保持座位与准备",
+    seatResumed.data.you.seat === 3 && seatResumed.data.you.ready === true,
+  );
+
+  console.log("\n大厅移动");
+  sitterReconnect.send("player.move", { x: 1.25, z: 2.5, facing: 0.75 });
+  const moved = await seatHost.next(
+    (m) => m.type === "player.moved" && m.data.playerId === sitterAState.data.you.id,
+  );
+  check(
+    "大厅移动广播",
+    moved.data.x === 1.25 && moved.data.z === 2.5 && moved.data.facing === 0.75,
+  );
+  await new Promise((resolve) => setTimeout(resolve, 70));
+  sitterReconnect.send("player.move", { x: 0.5, z: 0.5, facing: 9.9 });
+  const normalizedMove = await seatHost.next(
+    (m) =>
+      m.type === "player.moved" && m.data.playerId === sitterAState.data.you.id && m.data.x === 0.5,
+  );
+  check("大厅移动朝向归一化", Math.abs(normalizedMove.data.facing + 2.67) < 0.02);
+  await new Promise((resolve) => setTimeout(resolve, 70));
+  sitterReconnect.send("player.move", { x: 5.9, z: -5.9, facing: 0 });
+  const clampedMove = await seatHost.next(
+    (m) => m.type === "player.moved" && m.data.playerId === sitterAState.data.you.id,
+  );
+  check("大厅移动边界夹紧", clampedMove.data.x === 5.2 && clampedMove.data.z === -4.2);
+  sitterReconnect.send("player.update", { avatar: { text: "A", color: "#3ee08f" } });
+  const movedState = await seatHost.next(
+    (m) =>
+      m.type === "room.state" &&
+      m.data.room.players.some(
+        (player) => player.id === sitterAState.data.you.id && player.x === 5.2,
+      ),
+  );
+  check("大厅位置进入全量状态", Boolean(movedState));
+
+  const moveResume = new Client("移动重连");
+  await moveResume.connect();
+  moveResume.send("room.join", { code: seatCode, token: sitterAState.data.token });
+  const moveResumed = await moveResume.next(
+    (m) => m.type === "room.state" && m.data.you.name === "SeatA",
+  );
+  check("重连保留大厅位置", moveResumed.data.you.x === 5.2 && moveResumed.data.you.z === -4.2);
+  moveResume.close();
+
+  seatHost.close();
+  sitterA.close();
+  sitterB.close();
+  sitterScreen.close();
+  sitterReconnect.close();
 
   host.close();
   guest2.close();

@@ -12,6 +12,8 @@ import {
   ROOM_CODE_LEN,
   type Role,
   type Room,
+  type RoomPreview,
+  type RoomSeatView,
   type RoomSummary,
   type YiyuSettings,
 } from "../shared/protocol";
@@ -68,12 +70,31 @@ export function sanitizeWords(words: string[]): string[] {
   return result;
 }
 
-function firstFreeSeat(players: Player[]): number {
-  const used = new Set(players.map((p) => p.seat));
-  for (let i = 0; i < MAX_PLAYERS; i++) {
-    if (!used.has(i)) return i;
+/** 桌面座位只分给参赛者和未参赛房主大屏；观战大屏不占座位号 */
+function usedSeatNumbers(players: Player[]): Set<number> {
+  const used = new Set<number>();
+  for (const player of players) {
+    if (player.role === "spectator") continue;
+    if (player.seat >= 0 && player.seat < MAX_PLAYERS) used.add(player.seat);
   }
-  return players.length;
+  return used;
+}
+
+/** 从期望座位开始顺时针找空位；没有空位返回 -1 */
+export function pickSeat(players: Player[], preferred?: number): number {
+  const used = usedSeatNumbers(players);
+  const start =
+    preferred !== undefined &&
+    Number.isInteger(preferred) &&
+    preferred >= 0 &&
+    preferred < MAX_PLAYERS
+      ? preferred
+      : 0;
+  for (let offset = 0; offset < MAX_PLAYERS; offset++) {
+    const seat = (start + offset) % MAX_PLAYERS;
+    if (!used.has(seat)) return seat;
+  }
+  return -1;
 }
 
 export class RoomManager {
@@ -111,6 +132,45 @@ export class RoomManager {
 
   get size(): number {
     return this.rooms.size;
+  }
+
+  /**
+   * 入座页的公开房态：只含昵称、头像、角色、在线状态。
+   * 不返回玩家 id、token、准备状态和游戏数据。
+   */
+  preview(code: string): RoomPreview | null {
+    const record = this.rooms.get(code);
+    if (!record) return null;
+
+    const { room, gameId } = record;
+    const seats: (RoomSeatView | null)[] = new Array(room.maxPlayers).fill(null);
+    for (const player of room.players) {
+      if (player.role === "spectator") continue;
+      if (player.seat < 0 || player.seat >= seats.length) continue;
+      seats[player.seat] = {
+        seat: player.seat,
+        role: player.role,
+        name: player.name,
+        avatar: { ...player.avatar },
+        connected: player.connected,
+      };
+    }
+
+    const host = room.players.find((player) => player.id === room.hostId);
+    const hostSeat = host && host.seat >= 0 && host.seat < room.maxPlayers ? host.seat : -1;
+    return {
+      code: room.code,
+      phase: room.phase,
+      maxPlayers: room.maxPlayers,
+      hostPlays: room.hostPlays,
+      hostSeat,
+      host: {
+        name: host?.name ?? "房主",
+        avatar: host ? { ...host.avatar } : defaultAvatar("房主"),
+      },
+      gameId,
+      seats,
+    };
   }
 
   create(
@@ -162,6 +222,7 @@ export class RoomManager {
     name: string,
     role: Role,
     avatar?: { text: string; color: string },
+    options: { seat?: number; ready?: boolean } = {},
   ): JoinResult {
     const record = this.rooms.get(code);
     if (!record) return { ok: false, error: "ROOM_NOT_FOUND" };
@@ -184,13 +245,20 @@ export class RoomManager {
       return { ok: false, error: "NAME_TAKEN" };
     }
 
+    // 观战大屏不占桌面座位，排到玩家列表最后
+    const seat = role === "spectator" ? MAX_PLAYERS : pickSeat(record.room.players, options.seat);
+    if (role !== "spectator" && seat < 0) {
+      return { ok: false, error: "ROOM_FULL" };
+    }
+
     const player: Player = {
       id: shortId("p"),
       name: trimmed,
       avatar: avatar ?? defaultAvatar(trimmed),
       role,
-      seat: firstFreeSeat(record.room.players),
-      ready: false,
+      seat,
+      // 入座页坐下即准备；只有参赛玩家能 ready
+      ready: role === "player" && options.ready === true,
       connected: true,
       joinedAt: Date.now(),
     };
@@ -243,6 +311,11 @@ export class RoomManager {
       record.room.hostId = next.id;
       if (next.role === "spectator") {
         next.role = "screen";
+        // 被提升为大屏的观战者原本没有桌面座位，补一个空位
+        if (next.seat < 0 || next.seat >= record.room.maxPlayers) {
+          const seat = pickSeat(record.room.players);
+          if (seat >= 0) next.seat = seat;
+        }
         record.room.hostPlays = false;
       } else {
         record.room.hostPlays = next.role === "player";

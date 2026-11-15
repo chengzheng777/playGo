@@ -31,6 +31,27 @@ function check(name, ok, detail = "") {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function waitForWs(ws, predicate, timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      ws.off("message", onMessage);
+      reject(new Error("等待 WebSocket 消息超时"));
+    }, timeout);
+    function onMessage(raw) {
+      try {
+        const message = JSON.parse(raw.toString());
+        if (!predicate(message)) return;
+        clearTimeout(timer);
+        ws.off("message", onMessage);
+        resolve(message);
+      } catch {
+        /* ignore malformed */
+      }
+    }
+    ws.on("message", onMessage);
+  });
+}
+
 function findChrome() {
   if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
   const candidates =
@@ -188,18 +209,44 @@ async function joinAsPhone(port, pages, code, name, avatar, metrics, ready = tru
       name,
     )}, avatar: ${JSON.stringify(avatar)} }))`,
   );
-  await page.call("Page.navigate", { url: `${BASE}/j/${code}` });
-  await waitFor(page, "!!document.querySelector('.join-user')");
+  // 同一个浏览器里模拟多台手机：清掉上一个标签页留下的房间 token
+  await evaluate(page, `localStorage.removeItem("playgo:token:${code}")`);
+  await page.call("Page.navigate", { url: `${BASE}/j/${code}?renderer=lite` });
+  await waitFor(page, "!!document.querySelector('.seat-map')");
+  check(`手机 ${name} 入座场景无横向溢出`, await noHorizontalOverflow(page));
 
-  for (let attempt = 0; attempt < 8; attempt++) {
-    await click(page, ".panel .btn-primary");
-    await sleep(600);
-    if (await evaluate(page, "!!document.querySelector('.current-game')")) break;
-  }
+  // 入座场景：点第一个空位，坐下即加入并准备
+  const sat = await evaluate(
+    page,
+    `(() => {
+      const seat = document.querySelector('.seat-card.empty:not(:disabled)');
+      if (!seat) return false;
+      seat.click();
+      return true;
+    })()`,
+  );
+  await waitFor(page, "!!document.querySelector('.room-code')");
+  check(`手机 ${name} 通过入座场景进房`, sat === true);
 
+  const playerReady = `[...document.querySelectorAll('.player')].some((el) => el.textContent.includes(${JSON.stringify(
+    name,
+  )}) && el.querySelector('.tag-ready'))`;
+  check(
+    `手机 ${name} 大厅出现像素房`,
+    Boolean(await waitFor(page, "!!document.querySelector('.lobby-room-canvas')", 5000)),
+  );
   if (ready) {
+    await waitFor(page, playerReady);
+  } else {
+    // 坐下默认准备；需要未准备玩家时在大厅点「取消」
+    await waitFor(page, "!!document.querySelector('.current-game .btn')");
     await click(page, ".current-game .btn");
-    await waitFor(page, "!!document.querySelector('.tag-ready')");
+    await waitFor(
+      page,
+      `[...document.querySelectorAll('.player')].some((el) => el.textContent.includes(${JSON.stringify(
+        name,
+      )}) && !el.querySelector('.tag-ready'))`,
+    );
   }
   return page;
 }
@@ -212,6 +259,30 @@ async function newPage(port, metrics) {
   await client.call("Page.enable");
   await client.call("Runtime.enable");
   if (metrics) await client.call("Emulation.setDeviceMetricsOverride", metrics);
+  return client;
+}
+
+/** 独立浏览器上下文：localStorage 与主流程隔离，用来模拟另一台设备 */
+async function newIsolatedPage(port, metrics) {
+  const version = await fetch(`http://127.0.0.1:${port}/json/version`).then((response) =>
+    response.json(),
+  );
+  const browser = await Cdp.connect(version.webSocketDebuggerUrl);
+  const context = await browser.call("Target.createBrowserContext", {});
+  const created = await browser.call("Target.createTarget", {
+    url: "about:blank",
+    browserContextId: context.result.browserContextId,
+  });
+  const targets = await fetch(`http://127.0.0.1:${port}/json/list`).then((response) =>
+    response.json(),
+  );
+  const target = targets.find((entry) => entry.id === created.result.targetId);
+  if (!target) throw new Error("无法找到隔离页 target");
+  const client = await Cdp.connect(target.webSocketDebuggerUrl);
+  await client.call("Page.enable");
+  await client.call("Runtime.enable");
+  if (metrics) await client.call("Emulation.setDeviceMetricsOverride", metrics);
+  client.closeBrowser = () => browser.socket.close();
   return client;
 }
 
@@ -252,6 +323,10 @@ async function runMobileFlow(port, pages) {
   await clickByText(host, "创建「你画我猜」");
   const code = await waitFor(host, "document.querySelector('.room-code b')?.textContent ?? null");
   check("移动端房主创建你画我猜房间", Boolean(code), String(code));
+  check(
+    "移动端房主大厅出现像素房",
+    Boolean(await waitFor(host, "!!document.querySelector('.lobby-room-canvas')", 5000)),
+  );
 
   await waitFor(host, "!!document.querySelector('.word-batch')");
   await typeInto(host, ".word-batch", "移动词甲，移动词乙\n移动词丙");
@@ -261,6 +336,84 @@ async function runMobileFlow(port, pages) {
     Boolean(await waitFor(host, "document.querySelectorAll('.word-chip').length >= 3")),
   );
   check("移动端房主大厅无横向溢出", await noHorizontalOverflow(host));
+
+  // 未入座的旁观页面：检查像素场景本身（WebGL 可用时出画布，否则 2D 兜底）
+  const sceneViewer = await newIsolatedPage(port, {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 2,
+    mobile: true,
+  });
+  pages.push(sceneViewer);
+  await sceneViewer.call("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+  });
+  await sceneViewer.call("Page.navigate", { url: BASE });
+  await waitFor(
+    sceneViewer,
+    "!!document.querySelector('.onboarding') || !!document.querySelector('.home')",
+  );
+  await evaluate(
+    sceneViewer,
+    `localStorage.setItem("playgo:profile", JSON.stringify({ name: "MobileHost", avatar: { text: "M", color: "#fb7185" } }))`,
+  );
+  await sceneViewer.call("Page.navigate", { url: `${BASE}/j/${code}` });
+  const sceneRendered = await waitFor(
+    sceneViewer,
+    "!!document.querySelector('canvas.scene-canvas') || !!document.querySelector('.seat-map')",
+  );
+  check("入座场景渲染出 3D 画布或 2D 兜底", Boolean(sceneRendered));
+  check("入座场景无横向溢出", await noHorizontalOverflow(sceneViewer));
+  await sleep(500);
+  await screenshot(sceneViewer, "e2e-join-scene");
+
+  // 用一个 WebSocket 玩家验证已坐玩家预览；不写浏览器 localStorage，避免和后面的手机互相顶号
+  const previewGuest = new WebSocket(new URL("/ws", BASE).toString().replace("http", "ws"));
+  await new Promise((resolve) => previewGuest.once("open", resolve));
+  previewGuest.send(
+    JSON.stringify({
+      v: 1,
+      type: "room.join",
+      data: { code, name: "PreviewGuest", role: "player", ready: true },
+    }),
+  );
+  await sleep(500);
+
+  await sceneViewer.call("Page.navigate", { url: `${BASE}/j/${code}?renderer=lite` });
+  check(
+    "入座场景显示已坐玩家",
+    Boolean(await waitFor(sceneViewer, "!!document.querySelector('.seat-card.occupied')", 8000)),
+  );
+  await evaluate(sceneViewer, "document.querySelector('.seat-card.occupied')?.click()");
+  check(
+    "入座场景能查看玩家名片",
+    Boolean(await waitFor(sceneViewer, "!!document.querySelector('.seat-info-modal')", 3000)),
+  );
+
+  // 用房主同名入座：服务端拒绝重名，页面不能半加入
+  await evaluate(sceneViewer, "document.querySelector('.seat-info-modal .btn')?.click()");
+  await evaluate(sceneViewer, "document.querySelector('.seat-card.empty:not(:disabled)')?.click()");
+  check(
+    "入座重名会提示",
+    Boolean(
+      await waitFor(
+        sceneViewer,
+        "document.body.textContent.includes('这个昵称已经有人用了')",
+        8000,
+      ),
+    ),
+  );
+  check(
+    "入座失败仍留在场景",
+    (await evaluate(
+      sceneViewer,
+      "!!document.querySelector('.join-scene-page') && !document.querySelector('.room-code')",
+    )) === true,
+  );
+
+  previewGuest.send(JSON.stringify({ v: 1, type: "room.leave", data: {} }));
+  previewGuest.close();
+  await waitFor(host, "document.querySelectorAll('.player').length === 1", 5000);
 
   const phoneMetrics = { width: 390, height: 844, deviceScaleFactor: 2, mobile: true };
   const kickMe = await joinAsPhone(
@@ -322,6 +475,16 @@ async function runMobileFlow(port, pages) {
   });
   await sleep(300);
   check("移动端 320 房主大厅无横向溢出", await noHorizontalOverflow(host));
+  check(
+    "移动端像素房在玩家列表上方",
+    (await evaluate(
+      host,
+      "(() => { const s = document.querySelector('.lobby-room')?.getBoundingClientRect(); const p = document.querySelector('.players-panel')?.getBoundingClientRect(); return Boolean(s && p && s.top < p.top); })()",
+    )) === true,
+  );
+  await evaluate(host, "window.scrollTo(0, 0)");
+  await sleep(200);
+  await screenshot(host, "e2e-mobile-lobby-top-320");
   await evaluate(
     host,
     "document.querySelector('.players-panel')?.scrollIntoView({ block: 'center' })",
@@ -495,6 +658,56 @@ async function runMobileFlow(port, pages) {
   }
   await screenshot(host, "e2e-mobile-draw-reveal");
   await screenshot(second, "e2e-mobile-draw-reveal-phone");
+
+  // 独立浏览器上下文里验证：入座后刷新 /j/:code 会凭 token 直接回大厅
+  console.log("\n入座恢复");
+  const resumeHost = new WebSocket(`${BASE.replace(/^http/, "ws")}/ws`);
+  await new Promise((resolve, reject) => {
+    resumeHost.once("open", resolve);
+    resumeHost.once("error", reject);
+  });
+  const resumeCreatedPromise = waitForWs(resumeHost, (message) => message.type === "room.created");
+  resumeHost.send(
+    JSON.stringify({ v: 1, type: "room.create", data: { name: "ResumeHost", role: "screen" } }),
+  );
+  const resumeCreated = await resumeCreatedPromise;
+  const resumeCode = resumeCreated.data.room.code;
+
+  await sceneViewer.call("Page.navigate", { url: `${BASE}/j/${resumeCode}?renderer=lite` });
+  await waitFor(sceneViewer, "!!document.querySelector('.seat-map')");
+  const resumeStatePromise = waitForWs(
+    resumeHost,
+    (message) =>
+      message.type === "room.state" &&
+      message.data.room.players.some((player) => player.name === "MobileHost"),
+  );
+  await evaluate(sceneViewer, "document.querySelector('.seat-card.empty:not(:disabled)')?.click()");
+  check(
+    "隔离浏览器可以正常入座",
+    Boolean(await waitFor(sceneViewer, "!!document.querySelector('.room-code')", 8000)),
+  );
+  const resumeState = await resumeStatePromise;
+  const resumePlayer = resumeState.data.room.players.find((player) => player.name === "MobileHost");
+  check(
+    "入座后服务端记录座位与准备",
+    resumePlayer?.ready === true && resumePlayer?.role === "player",
+  );
+
+  await sceneViewer.call("Page.navigate", { url: `${BASE}/j/${resumeCode}` });
+  check(
+    "已有 token 打开 /j/:code 直接回大厅",
+    Boolean(await waitFor(sceneViewer, "!!document.querySelector('.room-code')", 8000)),
+  );
+  check(
+    "重连后路由改为 /r/",
+    (await evaluate(sceneViewer, "location.pathname.startsWith('/r/')")) === true,
+  );
+  check(
+    "重连不重新入座",
+    (await evaluate(sceneViewer, "!document.querySelector('.join-scene-page')")) === true,
+  );
+
+  resumeHost.close();
 }
 
 async function runHostPlaysFlow(port, pages) {
@@ -561,6 +774,43 @@ async function runHostPlaysFlow(port, pages) {
   check("房主参赛后出现独立大屏链接", Boolean(screenUrl?.includes("/s/")), screenUrl);
   check("房主参赛大厅无横向溢出", await noHorizontalOverflow(host));
   await screenshot(host, "e2e-host-plays-lobby");
+  await host.call("Emulation.setDeviceMetricsOverride", {
+    width: 3840,
+    height: 2160,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await sleep(600);
+  const room4k = await evaluate(
+    host,
+    `(() => {
+      const room = document.querySelector(".lobby-hero .lobby-room")?.getBoundingClientRect();
+      return {
+        width: room?.width ?? 0,
+        top: room?.top ?? 0,
+        bottom: room?.bottom ?? 0,
+        inner: window.innerHeight,
+        scrollHeight: document.documentElement.scrollHeight,
+      };
+    })()`,
+  );
+  check(
+    "4K 候场房宽度受控且完整可见",
+    room4k.width > 1200 &&
+      room4k.width <= 2050 &&
+      room4k.top >= 0 &&
+      room4k.bottom <= room4k.inner + 1 &&
+      room4k.scrollHeight <= room4k.inner + 1,
+    JSON.stringify(room4k),
+  );
+  await screenshot(host, "e2e-host-4k");
+  await host.call("Emulation.setDeviceMetricsOverride", {
+    width: 1280,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await sleep(300);
 
   await host.call("Emulation.setDeviceMetricsOverride", {
     width: 390,
@@ -747,6 +997,88 @@ async function main() {
       code = await evaluate(host, "document.querySelector('.room-code b')?.textContent ?? null");
     }
     check("创建房间", Boolean(code), String(code));
+    check(
+      "房主大厅出现像素房",
+      Boolean(await waitFor(host, "!!document.querySelector('.lobby-room-canvas')", 5000)),
+    );
+    check(
+      "PC 大厅以候场房为主界面",
+      (await evaluate(
+        host,
+        `(() => {
+          const main = document.querySelector(".layout.lobby-pc");
+          const room = document.querySelector(".lobby-hero .lobby-room")?.getBoundingClientRect();
+          const tools = document.querySelectorAll(".lobby-tool").length;
+          return Boolean(main && room && room.width > 800 && room.height > 420 && tools >= 3);
+        })()`,
+      )) === true,
+    );
+    check(
+      "PC 大厅无整体纵向滚动条",
+      (await evaluate(host, "document.documentElement.scrollHeight <= window.innerHeight + 1")) ===
+        true,
+    );
+    await clickByText(host, "设置");
+    check(
+      "PC 场景按钮打开房间面板",
+      Boolean(
+        await waitFor(host, "!!document.querySelector('.lobby-pc.drawer-room .host-mode-panel')"),
+      ),
+    );
+    await sleep(320);
+    await screenshot(host, "e2e-host-room-drawer");
+    await clickByText(host, "关闭");
+    await clickByText(host, "玩家");
+    check(
+      "PC 场景按钮打开玩家面板",
+      Boolean(
+        await waitFor(host, "!!document.querySelector('.lobby-pc.drawer-room .players-panel')"),
+      ),
+    );
+    await clickByText(host, "关闭");
+    await clickByText(host, "聊天");
+    const chatBox = await evaluate(
+      host,
+      `(() => {
+        const chat = document.querySelector(".lobby-chat-float")?.getBoundingClientRect();
+        const stage = document.querySelector(".lobby-room-stage")?.getBoundingClientRect();
+        if (!chat || !stage) return null;
+        return {
+          left: chat.left,
+          top: chat.top,
+          bottom: chat.bottom,
+          stageLeft: stage.left,
+          stageTop: stage.top,
+          stageBottom: stage.bottom,
+          stageHeight: stage.height,
+        };
+      })()`,
+    );
+    check(
+      "PC 悬浮聊天在场景左下",
+      Boolean(chatBox) &&
+        chatBox.left >= chatBox.stageLeft - 1 &&
+        chatBox.bottom <= chatBox.stageBottom + 1 &&
+        chatBox.top > chatBox.stageTop + chatBox.stageHeight / 2,
+      JSON.stringify(chatBox),
+    );
+    check(
+      "PC 悬浮聊天不产生页面滚动条",
+      (await evaluate(host, "document.documentElement.scrollHeight <= window.innerHeight + 1")) ===
+        true,
+    );
+    await screenshot(host, "e2e-host-chat-float");
+    await clickByText(host, "收起");
+    check(
+      "PC 悬浮聊天可收起",
+      (await evaluate(host, "!document.querySelector('.lobby-chat-float')")) === true,
+    );
+    await clickByText(host, "聊天");
+    check(
+      "PC 悬浮聊天可重新打开",
+      Boolean(await waitFor(host, "!!document.querySelector('.lobby-chat-float')")),
+    );
+    await sleep(250);
 
     guest = new WebSocket(new URL("/ws", BASE).toString().replace("http", "ws"));
     await new Promise((resolve) => guest.once("open", resolve));
@@ -773,20 +1105,26 @@ async function main() {
       phone,
       `localStorage.setItem("playgo:profile", JSON.stringify({ name: "小明", avatar: { text: "🦁", color: "#fbbf24" } }))`,
     );
-    await phone.call("Page.navigate", { url: `${BASE}/j/${code}` });
-    await waitFor(phone, "!!document.querySelector('.join-user')");
-
-    for (let attempt = 0; attempt < 6; attempt++) {
-      await click(phone, ".panel .btn-primary");
-      await sleep(800);
-      if (await evaluate(phone, "!!document.querySelector('.current-game')")) break;
-    }
+    await evaluate(phone, `localStorage.removeItem("playgo:token:${code}")`);
+    await phone.call("Page.navigate", { url: `${BASE}/j/${code}?renderer=lite` });
+    await waitFor(phone, "!!document.querySelector('.seat-map')");
+    await evaluate(
+      phone,
+      `(() => {
+        const seat = document.querySelector('.seat-card.empty:not(:disabled)');
+        if (!seat) return false;
+        seat.click();
+        return true;
+      })()`,
+    );
     check(
       "手机加入房间",
       Boolean(await waitFor(phone, "!!document.querySelector('.current-game')")),
     );
-
-    await click(phone, ".current-game .btn");
+    check(
+      "手机大厅出现像素房",
+      Boolean(await waitFor(phone, "!!document.querySelector('.lobby-room-canvas')", 5000)),
+    );
     await waitFor(host, "!!document.querySelector('.tag-ready')");
 
     for (let attempt = 0; attempt < 6; attempt++) {

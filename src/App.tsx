@@ -5,7 +5,7 @@ import { ColorGameView } from "./views/ColorView";
 import { DrawGameView } from "./views/DrawView";
 import { GameView } from "./views/GameView";
 import { HomeView } from "./views/HomeView";
-import { JoinView } from "./views/JoinView";
+import { JoinRoomView } from "./views/JoinRoomView";
 import { LobbyView } from "./views/LobbyView";
 import { OnboardingView } from "./views/OnboardingView";
 import { ScreenLobbyView, ScreenWaitView } from "./views/ScreenView";
@@ -23,7 +23,7 @@ export function App() {
       ) : (
         <>
           {state.view === "home" && <HomeView />}
-          {state.view === "join" && <JoinView />}
+          {state.view === "join" && <JoinRoomView />}
           {(state.view === "lobby" || isScreen) &&
             (state.game ? (
               <GameView />

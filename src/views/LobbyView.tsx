@@ -1,13 +1,16 @@
 import type { CSSProperties } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GAME_CATALOG, getGameMeta } from "../../shared/games";
 import { MAX_DRAW_WORD_LEN, MAX_DRAW_WORDS } from "../../shared/protocol";
 import { AvatarBadge } from "../components/Avatar";
 import { ChatPanel } from "../components/ChatPanel";
+import { LobbyChatFloat } from "../components/LobbyChatFloat";
+import { LobbyPixelRoom } from "../components/LobbyPixelRoom";
 import { PlayerList } from "../components/PlayerList";
 import { ProfileEditor } from "../components/ProfileEditor";
 import { QrCard } from "../components/QrCard";
 import { ScreenLinkCard } from "../components/ScreenLinkCard";
+import { useMediaQuery } from "../lib/useMediaQuery";
 import { store, useAppState } from "../store";
 
 const CONN_LABEL: Record<string, string> = {
@@ -21,6 +24,9 @@ const CONN_LABEL: Record<string, string> = {
 const SCORE_OPTIONS = [5, 8, 10, 12];
 const TIME_OPTIONS = [30, 45, 60, 90];
 
+type Drawer = "room";
+type RoomFocus = "game" | "settings" | "players" | "invite";
+
 /** 支持中英文逗号、顿号、分号、换行混排 */
 function parseWordInput(text: string): string[] {
   return text
@@ -32,9 +38,29 @@ function parseWordInput(text: string): string[] {
 export function LobbyView() {
   const state = useAppState();
   const { room, you, settings, drawSettings } = state;
+  const pc = useMediaQuery("(min-width: 920px)");
+  const [drawer, setDrawer] = useState<Drawer | null>(null);
+  const [chatOpen, setChatOpen] = useState(true);
+  const [roomFocus, setRoomFocus] = useState<RoomFocus>("game");
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [wordInput, setWordInput] = useState("");
   const [wordHint, setWordHint] = useState("");
+
+  useEffect(() => {
+    if (!pc) setDrawer(null);
+  }, [pc]);
+
+  useEffect(() => {
+    if (!pc || drawer !== "room") return;
+    const targets: Record<RoomFocus, string> = {
+      game: ".layout-left .games-panel, .layout-left .current-game",
+      settings: ".layout-left .host-mode-panel",
+      players: ".layout-left .players-panel",
+      invite: ".layout-left .qr-panel, .layout-left .screen-link-panel",
+    };
+    const target = document.querySelector(targets[roomFocus]);
+    target?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [pc, drawer, roomFocus]);
 
   if (!room || !you) {
     return (
@@ -56,6 +82,12 @@ export function LobbyView() {
   const selected = state.gameId;
   const canStart = Boolean(selected) && onlineParticipants.length >= 2 && needReady === 0;
   const customWords = drawSettings.customWords ?? [];
+  const roomTitle: Record<RoomFocus, string> = {
+    game: "游戏",
+    settings: "房主设置",
+    players: "玩家",
+    invite: "邀请",
+  };
 
   const startLabel = !selected
     ? "先选一个游戏"
@@ -66,6 +98,11 @@ export function LobbyView() {
       : needReady > 0
         ? `还有 ${needReady} 人未加入`
         : "开始游戏";
+
+  function openRoom(focus: RoomFocus) {
+    setRoomFocus(focus);
+    setDrawer("room");
+  }
 
   function addWords() {
     const incoming = parseWordInput(wordInput);
@@ -113,7 +150,7 @@ export function LobbyView() {
   }
 
   return (
-    <div className="lobby">
+    <div className={`lobby${pc ? " lobby-pc-page" : ""}`}>
       <header className="topbar">
         <div className="room-code">
           <span>房间</span>
@@ -131,8 +168,63 @@ export function LobbyView() {
         </button>
       </header>
 
-      <main className={isHost ? "layout layout-host" : "layout layout-player"}>
-        <div className="col">
+      <main
+        className={`layout ${isHost ? "layout-host" : "layout-player"}${
+          pc ? " lobby-pc" : ""
+        }${pc && drawer ? ` drawer-${drawer}` : ""}`}
+      >
+        {pc ? (
+          <div className="lobby-hero">
+            <LobbyPixelRoom
+              room={room}
+              you={you}
+              gameId={state.gameId}
+              overlay={
+                pc && chatOpen ? <LobbyChatFloat onClose={() => setChatOpen(false)} /> : undefined
+              }
+            />
+            <div className="lobby-hero-tools">
+              <button type="button" className="lobby-tool" onClick={() => openRoom("game")}>
+                🎮 游戏
+              </button>
+              <button type="button" className="lobby-tool" onClick={() => openRoom("players")}>
+                👥 玩家 {players.length}
+              </button>
+              <button
+                type="button"
+                className={`lobby-tool${chatOpen ? " on" : ""}`}
+                aria-pressed={chatOpen}
+                onClick={() => setChatOpen(true)}
+              >
+                💬 聊天
+              </button>
+              {isHost && (
+                <button type="button" className="lobby-tool" onClick={() => openRoom("settings")}>
+                  ⚙️ 设置
+                </button>
+              )}
+              {isHost && (
+                <button type="button" className="lobby-tool" onClick={() => openRoom("invite")}>
+                  🔗 邀请
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <LobbyPixelRoom room={room} you={you} gameId={state.gameId} />
+        )}
+
+        <div className="col layout-left">
+          <div className="lobby-drawer-head">
+            <h3>{roomTitle[roomFocus]}</h3>
+            <button
+              type="button"
+              className="btn btn-ghost btn-mini"
+              onClick={() => setDrawer(null)}
+            >
+              关闭
+            </button>
+          </div>
           {isHost && (
             <section className="panel settings-panel host-mode-panel">
               <div className="panel-head">
@@ -434,10 +526,21 @@ export function LobbyView() {
           />
         </div>
 
-        <div className="col">
-          <ChatPanel />
-        </div>
+        {!pc && (
+          <div className="col layout-chat">
+            <ChatPanel />
+          </div>
+        )}
       </main>
+
+      {pc && drawer && (
+        <button
+          type="button"
+          className="lobby-drawer-mask"
+          aria-label="关闭房间面板"
+          onClick={() => setDrawer(null)}
+        />
+      )}
 
       <footer className="actionbar">
         {isHost ? (
@@ -475,6 +578,19 @@ export function LobbyView() {
                   ? `已加入 ${readyCount}/${onlineParticipants.length} · 每人 ${drawSettings.roundsPerPlayer} 轮`
                   : `已加入 ${readyCount}/${onlineParticipants.length} · 目标 ${settings.targetScore} 分`}
             </span>
+          </div>
+        ) : pc && you.role === "player" ? (
+          <div className="player-actions">
+            {selected ? (
+              <button
+                className={`btn ${you.ready ? "btn-muted" : "btn-primary"} btn-block`}
+                onClick={() => store.toggleReady()}
+              >
+                {you.ready ? "已加入 · 取消" : "加入游戏"}
+              </button>
+            ) : (
+              <span className="ready-summary">等待房主选游戏</span>
+            )}
           </div>
         ) : null}
       </footer>

@@ -46,12 +46,22 @@ describe("一起 UNO", () => {
 
   it("出牌后手牌减少", () => {
     const game = new UnoGame(participants, 0);
-    const view = game.viewFor(participants[0]!.id);
-    const turnId = view.turnPlayerId;
-    const cardId = game.viewFor(turnId).playableIds[0];
+    let turnId = game.viewFor(participants[0]!.id).turnPlayerId;
+    let view = game.viewFor(turnId);
+    // 起手可能没有可出的牌：先摸牌，直到当前玩家有牌可出
+    for (let guard = 0; view.playableIds.length === 0 && guard < 20; guard++) {
+      expect(game.action(turnId, { type: "draw" }, 0)).toBe(true);
+      view = game.viewFor(turnId);
+      if (view.playableIds.length === 0) {
+        turnId = view.turnPlayerId;
+        view = game.viewFor(turnId);
+      }
+    }
+    const cardId = view.playableIds[0];
     expect(cardId).toBeDefined();
+    const before = view.hand.length;
     expect(game.action(turnId, { type: "play", cardId: cardId!, color: "red" }, 0)).toBe(true);
-    expect(game.viewFor(turnId).hand).toHaveLength(6);
+    expect(game.viewFor(turnId).hand).toHaveLength(before - 1);
   });
 
   it("摸牌后要么可出、要么轮转", () => {

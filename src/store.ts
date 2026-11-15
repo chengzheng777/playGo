@@ -18,6 +18,7 @@ import type {
   YiyuView,
 } from "../shared/protocol";
 import { DEFAULT_DRAW_SETTINGS, DEFAULT_SETTINGS } from "../shared/protocol";
+import { lobbyMotion } from "./lib/lobby-motion";
 
 const NAME_KEY = "playgo:name";
 const TOKEN_PREFIX = "playgo:token:";
@@ -156,7 +157,16 @@ class Store {
     };
 
     if (route.view === "join") {
-      this.state = { ...base, view: "join" };
+      const token = readToken(route.code);
+      if (token) {
+        // 已经入过座：刷新/回链时直接重连，不再经过入座场景
+        this.session = { code: route.code, token };
+        this.state = { ...base, view: "lobby", conn: "connecting", joinCode: route.code };
+        history.replaceState(null, "", `/r/${route.code}`);
+        queueMicrotask(() => this.openSocket(true));
+      } else {
+        this.state = { ...base, view: "join" };
+      }
     } else if (route.view === "lobby") {
       const token = readToken(route.code);
       if (token) {
@@ -237,7 +247,43 @@ class Store {
     this.openSocket(false);
   }
 
-  joinRoom(code: string, name: string): void {
+  /** 大厅点「加入」：先进入像素房间预览，不立即占座 */
+  openJoinScene(code: string): void {
+    const roomCode = code.trim().toUpperCase();
+    if (!roomCode) return;
+
+    // 本机已有这个房间的身份：直接重连，避免重名入座
+    const token = readToken(roomCode);
+    if (token) {
+      this.closedByUs = false;
+      this.session = { code: roomCode, token };
+      this.set({ view: "lobby", joinCode: roomCode, conn: "connecting", busy: true, error: null });
+      history.replaceState(null, "", `/r/${roomCode}`);
+      this.openSocket(true);
+      return;
+    }
+
+    this.set({
+      view: "join",
+      joinCode: roomCode,
+      room: null,
+      you: null,
+      conn: "idle",
+      busy: false,
+      error: null,
+      gameId: null,
+      settings: { ...DEFAULT_SETTINGS },
+      drawSettings: { ...DEFAULT_DRAW_SETTINGS },
+      game: null,
+      uno: null,
+      color: null,
+      draw: null,
+      drawEvent: null,
+    });
+    history.replaceState(null, "", `/j/${roomCode}`);
+  }
+
+  joinRoom(code: string, name: string, options: { seat?: number; ready?: boolean } = {}): void {
     const trimmed = name.trim();
     const roomCode = code.trim().toUpperCase();
     if (!trimmed || !roomCode || this.state.busy) return;
@@ -252,6 +298,8 @@ class Store {
         name: trimmed,
         role: "player",
         avatar: this.state.profile?.avatar,
+        seat: options.seat,
+        ready: options.ready,
       },
     });
     this.openSocket(false);
@@ -278,6 +326,23 @@ class Store {
       },
     });
     this.openSocket(false);
+  }
+
+  /** 大厅像素房里移动；位置只是装饰，服务端会做边界校验 */
+  movePlayer(x: number, z: number, facing: number): void {
+    const { room, you } = this.state;
+    if (!room || !you || room.phase !== "lobby") return;
+    if (this.socket?.readyState !== WebSocket.OPEN) return;
+    if (!Number.isFinite(x) || !Number.isFinite(z) || !Number.isFinite(facing)) return;
+    this.send({
+      v: 1,
+      type: "player.move",
+      data: {
+        x: Math.min(5.2, Math.max(-5.2, x)),
+        z: Math.min(4.2, Math.max(-4.2, z)),
+        facing: Math.atan2(Math.sin(facing), Math.cos(facing)),
+      },
+    });
   }
 
   toggleReady(): void {
@@ -380,6 +445,7 @@ class Store {
     this.queue = [];
     this.attempts = 0;
     window.clearTimeout(this.reconnectTimer);
+    lobbyMotion.clear();
 
     this.set({
       view: "home",
@@ -536,6 +602,7 @@ class Store {
       case "room.created": {
         const { room, you, token } = message.data;
         this.applySession(room.code, token);
+        lobbyMotion.seed(room.players);
         this.set({
           view: "lobby",
           room,
@@ -573,6 +640,7 @@ class Store {
           serverTime,
         } = message.data;
         this.applySession(room.code, token);
+        lobbyMotion.seed(room.players);
         const isScreenView = this.state.view === "screen";
         const wasLobby = this.state.view === "lobby";
         this.set({
@@ -598,6 +666,15 @@ class Store {
 
       case "chat.message": {
         this.set({ chat: [...this.state.chat, message.data].slice(-MAX_CHAT_HISTORY) });
+        return;
+      }
+
+      case "player.moved": {
+        lobbyMotion.set(message.data.playerId, {
+          x: message.data.x,
+          z: message.data.z,
+          facing: message.data.facing,
+        });
         return;
       }
 
@@ -649,6 +726,19 @@ class Store {
     }
 
     const sessionGone = code === "ROOM_NOT_FOUND" || code === "BAD_TOKEN" || code === "KICKED";
+    if (sessionGone) {
+      // 房间已结束 / 身份失效 / 被移出：清掉本机 token，避免下次自动重连又失败
+      const codeToForget = this.session?.code ?? this.state.joinCode;
+      if (codeToForget) {
+        try {
+          localStorage.removeItem(TOKEN_PREFIX + codeToForget);
+          localStorage.removeItem(SCREEN_TOKEN_PREFIX + codeToForget);
+        } catch {
+          /* ignore */
+        }
+      }
+      lobbyMotion.clear();
+    }
 
     if (sessionGone && this.state.view === "screen") {
       this.session = null;

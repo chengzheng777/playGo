@@ -35,10 +35,12 @@
 | `welcome`        | S→C       | `{clientId, protocol, serverTime}`                                            | 连接建立后立即下发                             |
 | `room.create`    | C→S       | `{name, role, gameId?, avatar?}`                                              | 创建房间，可带上大厅里选好的游戏与本机头像     |
 | `room.created`   | S→C       | `{room, token}`                                                               | 仅创建者收到；`token` 用于重连                 |
-| `room.join`      | C→S       | `{code, name, role, token?, avatar?}`                                         | 加入；带 `token` 即重连                        |
+| `room.join`      | C→S       | `{code, name, role, token?, avatar?, seat?, ready?}`                          | 加入；带 `token` 即重连；入座页可带期望座位    |
 | `room.state`     | S→C       | `{room, you, version, token, gameId, settings, game, uno, color, serverTime}` | 全量状态，任何变更后广播                       |
 | `room.left`      | S→C       | `{playerId, reason}`                                                          | 玩家离开                                       |
 | `player.ready`   | C→S       | `{ready}`                                                                     | 准备/取消                                      |
+| `player.move`    | C→S       | `{x, z, facing?}`                                                             | 大厅像素房位置；仅 lobby，约 20 次/秒节流      |
+| `player.moved`   | S→C       | `{playerId, x, z, facing}`                                                    | 位置广播；不改 version，不触发全量状态         |
 | `player.update`  | C→S       | `{name?, avatar?}`                                                            | 修改用户资料，随后广播                         |
 | `player.kick`    | C→S       | `{playerId}`                                                                  | 仅房主、仅大厅；移出玩家/大屏并使其 token 失效 |
 | `room.hostplays` | C→S       | `{enabled}`                                                                   | 仅房主、仅大厅；切换房主是否参赛               |
@@ -71,6 +73,9 @@ interface Player {
   connected: boolean;
   joinedAt: number;
   latencyMs?: number; // 由心跳估算
+  x?: number; // 大厅像素房里的位置；没走动过时为空
+  z?: number;
+  facing?: number; // 朝向弧度，归一化到 [-π, π]
 }
 
 interface Avatar {
@@ -131,22 +136,76 @@ interface YiyuSettings {
 - 可以在 `lobby` / `playing` / `ended` 任意阶段加入；断线保留 90 秒，可凭 token 重连。
 - 网页路由为 `/s/:code`；普通玩家加入仍是 `/j/:code`。
 
+### 4.1 入座预览
+
+`/j/:code` 先加载只读房态，不建立 WebSocket、不占房间成员：
+
+```http
+GET /api/rooms/:code
+```
+
+```ts
+interface RoomSeatView {
+  seat: number; // 下标即座位号
+  role: Role;
+  name: string;
+  avatar: Avatar;
+  connected: boolean;
+}
+
+interface RoomPreview {
+  code: string;
+  phase: Phase;
+  maxPlayers: number;
+  hostPlays: boolean;
+  hostSeat: number; // -1 表示房主暂时不在桌上
+  host: { name: string; avatar: Avatar };
+  gameId: string | null;
+  seats: (RoomSeatView | null)[]; // 长度 = maxPlayers，空位为 null
+}
+```
+
+- 只返回昵称、头像、角色、在线状态；不返回玩家 id、token、准备状态、手牌、词语、照片。
+- 玩家走到空椅后发 `room.join { code, name, role: "player", avatar, seat, ready: true }`。
+- `seat` 是期望座位；服务端在空闲时采用，被占时从该座位顺时针找最近空位。
+- `ready` 只对 `role: "player"` 生效，加入和准备原子完成；重连不改变原座位与准备状态。
+- 观战大屏不占桌面座位；未参赛房主仍占一个参赛名额（`role: "screen"`），但画面里站在大屏旁；房主参赛后变成 `player` 坐椅子。
+- 房间不存在返回 404；预览接口按 IP 限流，超过返回 429。房间发现关闭时仍可按房间码预览。
+
+### 4.2 大厅位置
+
+大厅像素房里的走动通过两条轻量消息同步，不进入游戏规则：
+
+```jsonc
+// C→S，仅 lobby、非 spectator；x/z 用房间坐标
+{ "v": 1, "type": "player.move", "data": { "x": 1.25, "z": 2.5, "facing": 0.75 } }
+
+// S→C，房间内广播；不改变 room.state 的 version
+{ "v": 1, "type": "player.moved", "data": { "playerId": "p-xxxx", "x": 1.25, "z": 2.5, "facing": 0.75 } }
+```
+
+- 服务端把位置夹紧到约 `[-5.2, 5.2] × [-4.2, 4.2]`，每连接约 20 次/秒节流。
+- `facing` 是朝向弧度；客户端发送前归一化，服务端也会归一化到 `[-π, π]`，不会因为绕圈累积而报错。
+- 位置存在 `Player.x/z/facing` 上，重连时随 `room.state` 带回；客户端不需要重走一遍。
+- 游戏开始后忽略 `player.move`；回到大厅后继续使用最后位置。
+- 观战大屏不参与大厅位置同步；客户端用自己的座位/准备状态给默认站位。
+
 ---
 
 ## 5. 错误码
 
-| code             | 含义                 | fatal    |
-| ---------------- | -------------------- | -------- |
-| `PROTOCOL_ERROR` | 帧格式错误 / 超长    | ✅       |
-| `ROOM_NOT_FOUND` | 房间码不存在或已结束 | ❌       |
-| `ROOM_FULL`      | 人数已达上限         | ❌       |
-| `NAME_TAKEN`     | 昵称重复             | ❌       |
-| `BAD_TOKEN`      | 重连 token 无效      | ❌       |
-| `NOT_HOST`       | 非房主执行房主操作   | ❌       |
-| `BAD_PHASE`      | 当前阶段不允许该操作 | ❌       |
-| `RATE_LIMITED`   | 频率超限             | ❌       |
-| `KICKED`         | 被房主移出房间       | 随后断开 |
-| `INTERNAL`       | 服务端异常           | ✅       |
+| code             | 含义                              | fatal    |
+| ---------------- | --------------------------------- | -------- |
+| `PROTOCOL_ERROR` | JSON/字段校验失败、帧超长；会断开 | ✅       |
+| `ROOM_NOT_FOUND` | 房间码不存在或已结束              | ❌       |
+| `ROOM_FULL`      | 人数已达上限                      | ❌       |
+| `NAME_TAKEN`     | 昵称重复                          | ❌       |
+| `BAD_TOKEN`      | 重连 token 无效                   | ❌       |
+| `NOT_HOST`       | 非房主执行房主操作                | ❌       |
+| `BAD_PHASE`      | 当前阶段不允许该操作              | ❌       |
+| `RATE_LIMITED`   | 频率超限                          | ❌       |
+| `KICKED`         | 被房主移出房间                    | 随后断开 |
+| `INTERNAL`       | 服务端异常                        | ✅       |
 
 ---
 
@@ -272,15 +331,17 @@ interface YiyuEvent {
 
 ## 9. HTTP 接口（与 WebSocket 同源）
 
-| 方法 | 路径            | 返回                                       | 说明                                 |
-| ---- | --------------- | ------------------------------------------ | ------------------------------------ |
-| GET  | `/api/health`   | `{ok, app, version, port, rooms, buildId}` | 健康检查；`buildId` 用于识别过期页面 |
-| GET  | `/api/networks` | `{port, urls: [{ip, iface, kind}]}`        | 生成二维码可用的局域网地址           |
-| GET  | `/api/rooms`    | `{rooms: RoomSummary[]}`                   | 大厅房间列表                         |
-| GET  | `/api/qr?text=` | `image/svg+xml`                            | 生成二维码，只接受 http(s) 文本      |
+| 方法 | 路径               | 返回                                       | 说明                                     |
+| ---- | ------------------ | ------------------------------------------ | ---------------------------------------- |
+| GET  | `/api/health`      | `{ok, app, version, port, rooms, buildId}` | 健康检查；`buildId` 用于识别过期页面     |
+| GET  | `/api/networks`    | `{port, urls: [{ip, iface, kind}]}`        | 生成二维码可用的局域网地址               |
+| GET  | `/api/rooms`       | `{rooms: RoomSummary[]}`                   | 大厅房间列表                             |
+| GET  | `/api/rooms/:code` | `RoomPreview`                              | 入座页只读房态；404 房间不存在，429 限流 |
+| GET  | `/api/qr?text=`    | `image/svg+xml`                            | 生成二维码，只接受 http(s) 文本          |
 
 `RoomSummary` 只含公开信息：房间码、房主名、游戏、人数、阶段，不含玩家 token。
 `/api/rooms` 由客户端每 3 秒轮询一次，用来刷新大厅列表。
+`/api/rooms/:code` 由 `/j/:code` 每 2 秒轮询一次；不改变房间状态，也不在大厅列表里额外暴露房间。
 
 ---
 

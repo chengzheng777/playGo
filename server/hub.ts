@@ -15,6 +15,7 @@ import {
   MAX_DRAW_WORD_LEN,
   MAX_DRAW_WORDS,
   MAX_NAME_LEN,
+  MAX_PLAYERS,
   type Player,
   PROTOCOL_VERSION,
   type Role,
@@ -40,6 +41,8 @@ interface Conn {
   rateCount: number;
   rateResetAt: number;
   lastChatAt: number;
+  /** 大厅移动节流：最多 20 次/秒 */
+  lastMoveAt: number;
 }
 
 const RATE_LIMIT_PER_SEC = 40;
@@ -69,8 +72,21 @@ const joinSchema = z.object({
   role: roleSchema.optional(),
   token: z.string().length(32).optional(),
   avatar: avatarShape.optional(),
+  seat: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_PLAYERS - 1)
+    .optional(),
+  ready: z.boolean().optional(),
 });
 const readySchema = z.object({ ready: z.boolean() });
+const moveSchema = z.object({
+  x: z.number().min(-6).max(6),
+  z: z.number().min(-6).max(6),
+  // 朝向由服务端归一化；这里只拒绝非有限值，避免客户端角度累积后被整帧判死
+  facing: z.number().finite().optional(),
+});
 const profileSchema = z.object({
   name: nameSchema.optional(),
   avatar: avatarShape.optional(),
@@ -167,6 +183,11 @@ function parseClientMessage(raw: string): Parsed {
       if (!parsed.success) return { kind: "invalid" };
       return { kind: "ok", msg: { ...base, type: "player.ready", data: parsed.data } };
     }
+    case "player.move": {
+      const parsed = moveSchema.safeParse(msg.data);
+      if (!parsed.success) return { kind: "invalid" };
+      return { kind: "ok", msg: { ...base, type: "player.move", data: parsed.data } };
+    }
     case "player.update": {
       const parsed = profileSchema.safeParse(msg.data);
       if (!parsed.success) return { kind: "invalid" };
@@ -240,6 +261,7 @@ export class Hub {
       rateCount: 0,
       rateResetAt: 0,
       lastChatAt: 0,
+      lastMoveAt: 0,
     };
     this.conns.set(conn.id, conn);
 
@@ -321,7 +343,19 @@ export class Hub {
     const parsed = parseClientMessage(raw);
     if (parsed.kind === "unknown") return;
     if (parsed.kind === "invalid") {
-      this.fail(conn, "PROTOCOL_ERROR", "无法解析的消息");
+      let type = "帧格式";
+      try {
+        const message = JSON.parse(raw) as { type?: unknown };
+        if (typeof message?.type === "string") type = message.type.slice(0, 32);
+      } catch {
+        /* ignore */
+      }
+      console.warn("[hub] 无法解析的消息", type);
+      this.fail(
+        conn,
+        "PROTOCOL_ERROR",
+        type === "帧格式" ? "无法解析的消息" : `无法解析的消息（${type}）`,
+      );
       return;
     }
 
@@ -340,6 +374,8 @@ export class Hub {
         return void this.leaveRoom(conn);
       case "player.ready":
         return void this.setReady(conn, parsed.msg.data.ready);
+      case "player.move":
+        return void this.movePlayer(conn, parsed.msg.data);
       case "player.update":
         return void this.setProfile(conn, parsed.msg.data);
       case "player.kick":
@@ -389,7 +425,15 @@ export class Hub {
 
   private joinRoom(
     conn: Conn,
-    data: { code: string; name?: string; role?: Role; token?: string; avatar?: Avatar },
+    data: {
+      code: string;
+      name?: string;
+      role?: Role;
+      token?: string;
+      avatar?: Avatar;
+      seat?: number;
+      ready?: boolean;
+    },
   ): void {
     if (conn.roomCode) {
       this.replyError(conn, "BAD_PHASE", "你已经在一个房间里了");
@@ -403,7 +447,10 @@ export class Hub {
 
     const result = data.token
       ? this.rooms.reconnect(data.code, data.token)
-      : this.rooms.join(data.code, data.name ?? "", data.role ?? "player", data.avatar);
+      : this.rooms.join(data.code, data.name ?? "", data.role ?? "player", data.avatar, {
+          seat: data.seat,
+          ready: data.ready,
+        });
 
     if (!result.ok) {
       if (result.error === "ROOM_NOT_FOUND" || result.error === "BAD_TOKEN") {
@@ -459,6 +506,30 @@ export class Hub {
     if (!roomCode || !playerId) return;
     if (!this.rooms.setReady(roomCode, playerId, ready)) return;
     this.broadcast(roomCode);
+  }
+
+  /** 大厅像素房的位置是装饰性的，服务端只做边界校验和节流，不参与游戏规则 */
+  private movePlayer(conn: Conn, data: { x: number; z: number; facing?: number }): void {
+    const { roomCode, playerId } = conn;
+    if (!roomCode || !playerId) return;
+    const record = this.rooms.get(roomCode);
+    const player = record?.room.players.find((item) => item.id === playerId);
+    if (!record || !player) return;
+    if (record.room.phase !== "lobby" || player.role === "spectator") return;
+    const now = Date.now();
+    if (now - conn.lastMoveAt < 50) return;
+    conn.lastMoveAt = now;
+
+    player.x = Math.round(Math.min(5.2, Math.max(-5.2, data.x)) * 100) / 100;
+    player.z = Math.round(Math.min(4.2, Math.max(-4.2, data.z)) * 100) / 100;
+    const facing = data.facing ?? player.facing ?? 0;
+    player.facing = Math.round(Math.atan2(Math.sin(facing), Math.cos(facing)) * 100) / 100;
+    record.lastActiveAt = now;
+    this.broadcastRaw(roomCode, {
+      v: 1,
+      type: "player.moved",
+      data: { playerId: playerId, x: player.x, z: player.z, facing: player.facing },
+    });
   }
 
   private setProfile(conn: Conn, data: { name?: string; avatar?: Avatar }): void {

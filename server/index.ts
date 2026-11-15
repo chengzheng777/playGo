@@ -4,6 +4,7 @@ import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 import { WebSocketServer } from "ws";
+import { isRoomCode } from "../shared/protocol";
 import { firewallStatus, openFirewall } from "./firewall";
 import { Hub } from "./hub";
 import { clientIp, lanAddresses } from "./net";
@@ -44,6 +45,29 @@ function readLimit(name: string): number {
 const maxRooms = readLimit("PLAYGO_MAX_ROOMS");
 const maxConnections = readLimit("PLAYGO_MAX_CONNECTIONS");
 const maxConnectionsPerIp = readLimit("PLAYGO_MAX_CONNECTIONS_PER_IP");
+
+/** 入座页预览是公开接口，按 IP 限流，避免被用来穷举房间码；一桌 8 台手机约 240 次/分钟 */
+const PREVIEW_LIMIT_PER_MIN = 600;
+const previewHits = new Map<string, { count: number; resetAt: number }>();
+
+function previewAllowed(ip: string): boolean {
+  if (!ip) return true;
+  const now = Date.now();
+  const entry = previewHits.get(ip);
+  if (!entry || now > entry.resetAt) {
+    previewHits.set(ip, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (entry.count >= PREVIEW_LIMIT_PER_MIN) return false;
+  entry.count += 1;
+  return true;
+}
+
+function sweepPreviewHits(now = Date.now()): void {
+  for (const [ip, entry] of previewHits) {
+    if (now > entry.resetAt) previewHits.delete(ip);
+  }
+}
 
 const allowedOrigins = (process.env.PLAYGO_ALLOWED_ORIGINS ?? "")
   .split(",")
@@ -226,6 +250,28 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
 
+    // 入座页只读预览：按房间码访问，不改变房间状态，不返回玩家 id/token。
+    const previewMatch = /^\/api\/rooms\/([A-Za-z0-9]{4})$/.exec(url.pathname);
+    if (previewMatch) {
+      if (req.method !== "GET") {
+        json(res, 405, { error: "method not allowed" });
+        return;
+      }
+      const code = previewMatch[1]?.toUpperCase() ?? "";
+      const ip = clientIp(req, trustProxy);
+      if (!previewAllowed(ip)) {
+        json(res, 429, { error: "too many requests" });
+        return;
+      }
+      const preview = isRoomCode(code) ? rooms.preview(code) : null;
+      if (!preview) {
+        json(res, 404, { error: "room not found" });
+        return;
+      }
+      json(res, 200, preview);
+      return;
+    }
+
     if (url.pathname === "/api/qr") {
       const text = url.searchParams.get("text") ?? "";
       if (!/^https?:\/\/[^\s]{1,500}$/.test(text)) {
@@ -306,7 +352,10 @@ server.on("upgrade", (req, socket, head) => {
 });
 
 const heartbeat = setInterval(() => hub.sweep(), 30_000);
-const sweeper = setInterval(() => rooms.sweepEmpty(), 30_000);
+const sweeper = setInterval(() => {
+  rooms.sweepEmpty();
+  sweepPreviewHits();
+}, 30_000);
 const gameTicker = setInterval(() => hub.tickGames(), 500);
 heartbeat.unref();
 sweeper.unref();
