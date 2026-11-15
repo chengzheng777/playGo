@@ -212,5 +212,5 @@ shared/protocol.ts                # RoomPreview / SeatView / room.join 字段
 - 产物体积：共享 3D `world` chunk 547 KB / **139.6 KB gzip**（入座和大厅共用、懒加载），主包 320 KB / 98.6 KB gzip，首页不加载 three。
 - 实际实现：320p 内部渲染、正交 45°/32° 固定机位、7/8 把按座位数生成的椅子、桌上蜡烛灯、墙边大屏、窗、书架、绿植、方块小人、清晰名字标签、空位绿色高亮、点地/摇杆/WASD 移动、碰撞、0.35s 入座动画。
 - 降级：无 WebGL、上下文丢失或 `?renderer=lite` 时使用同一份预览数据的 2D 座位图。
-- 验证：`tests/rooms.test.ts`（8 项）、`tests/join-scene.test.ts`（6 项）、`pnpm smoke`（93 项）、`pnpm e2e`（108 项，含 3D 画布、入座、名片、重名、token 重连、390/360/320 宽度）。
+- 验证：`tests/rooms.test.ts`（8 项）、`tests/join-scene.test.ts`（6 项）、`pnpm smoke`（93 项）、`pnpm e2e`（112 项，含 3D 画布、入座、名片、重名、token 重连、390/360/320 宽度）。
 - 未覆盖：真实低端手机帧率、真机触控手感、开局中/满员的完整视觉状态，留上线前手测。

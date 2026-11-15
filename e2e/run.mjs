@@ -1022,18 +1022,36 @@ async function main() {
     check(
       "PC 场景按钮打开房间面板",
       Boolean(
-        await waitFor(host, "!!document.querySelector('.lobby-pc.drawer-room .host-mode-panel')"),
+        await waitFor(host, "!!document.querySelector('.lobby-room-modal .host-mode-panel')"),
       ),
     );
     await sleep(320);
     await screenshot(host, "e2e-host-room-drawer");
-    await clickByText(host, "关闭");
+    check(
+      "PC 弹窗打开后焦点在弹窗内",
+      (await evaluate(host, "Boolean(document.activeElement?.closest('.lobby-room-modal'))")) ===
+        true,
+    );
+    check(
+      "PC 弹窗打开时锁定页面滚动",
+      (await evaluate(host, "document.body.style.overflow === 'hidden'")) === true,
+    );
+    await evaluate(
+      host,
+      "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))",
+    );
+    check(
+      "PC 弹窗支持 Esc 关闭",
+      Boolean(await waitFor(host, "!document.querySelector('.lobby-room-modal')")),
+    );
+    check(
+      "PC 弹窗关闭后恢复页面滚动",
+      (await evaluate(host, "document.body.style.overflow !== 'hidden'")) === true,
+    );
     await clickByText(host, "玩家");
     check(
       "PC 场景按钮打开玩家面板",
-      Boolean(
-        await waitFor(host, "!!document.querySelector('.lobby-pc.drawer-room .players-panel')"),
-      ),
+      Boolean(await waitFor(host, "!!document.querySelector('.lobby-room-modal .players-panel')")),
     );
     await clickByText(host, "关闭");
     await clickByText(host, "聊天");
