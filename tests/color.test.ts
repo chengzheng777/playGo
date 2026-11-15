@@ -94,6 +94,26 @@ describe("拍颜色", () => {
     expect(playerView.results.every((result) => result.photo === undefined)).toBe(true);
   });
 
+  it("房主参赛时照片仍只发给独立大屏", () => {
+    const all = makePlayers(4);
+    all[0]!.role = "player";
+    const screenId = "screen-1";
+    const game = new ColorGame(
+      all,
+      { hostId: HOST_ID, screenIds: [screenId], rounds: 1, shootSeconds: 40 },
+      0,
+    );
+    const exact = targetRgb(game.viewFor(screenId).target.hex);
+    for (const [index, player] of all.entries()) {
+      game.action(player.id, { type: "shoot", rgb: exact, photo: PHOTO }, 1000 + index * 100);
+    }
+
+    expect(game.viewFor(screenId).results.every((result) => typeof result.photo === "string")).toBe(
+      true,
+    );
+    expect(game.viewFor(HOST_ID).results.every((result) => result.photo === undefined)).toBe(true);
+  });
+
   it("未提交不得分，轮次结束后可进入下一轮或结束", () => {
     const game = new ColorGame(participants, { hostId: HOST_ID, rounds: 2, shootSeconds: 10 }, 0);
     const exact = targetRgb(game.viewFor(HOST_ID).target.hex);

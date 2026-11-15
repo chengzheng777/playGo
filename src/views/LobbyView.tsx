@@ -7,6 +7,7 @@ import { ChatPanel } from "../components/ChatPanel";
 import { PlayerList } from "../components/PlayerList";
 import { ProfileEditor } from "../components/ProfileEditor";
 import { QrCard } from "../components/QrCard";
+import { ScreenLinkCard } from "../components/ScreenLinkCard";
 import { store, useAppState } from "../store";
 
 const CONN_LABEL: Record<string, string> = {
@@ -46,7 +47,8 @@ export function LobbyView() {
 
   const isHost = room.hostId === you.id;
   const players = [...room.players].sort((a, b) => a.seat - b.seat);
-  const participants = players.filter((player) => player.id !== room.hostId);
+  // 参赛者 = role player；房主参赛时也在这里，大屏不计入
+  const participants = players.filter((player) => player.role === "player");
   const onlineParticipants = participants.filter((player) => player.connected);
   const readyCount = onlineParticipants.filter((player) => player.ready).length;
   const needReady = onlineParticipants.length - readyCount;
@@ -58,7 +60,9 @@ export function LobbyView() {
   const startLabel = !selected
     ? "先选一个游戏"
     : onlineParticipants.length < 2
-      ? "至少需要 2 名玩家"
+      ? room.hostPlays
+        ? "至少需要 2 名参赛者（含房主）"
+        : "至少需要 2 名玩家"
       : needReady > 0
         ? `还有 ${needReady} 人未加入`
         : "开始游戏";
@@ -129,6 +133,40 @@ export function LobbyView() {
 
       <main className={isHost ? "layout layout-host" : "layout layout-player"}>
         <div className="col">
+          {isHost && (
+            <section className="panel settings-panel host-mode-panel">
+              <div className="panel-head">
+                <h2>房主模式</h2>
+                <span className="count">仅大厅可改</span>
+              </div>
+              <div className="setting-row">
+                <span className="label">房主参赛</span>
+                <div className="segmented">
+                  <button
+                    type="button"
+                    className={!room.hostPlays ? "on" : ""}
+                    onClick={() => store.setHostPlays(false)}
+                  >
+                    只做大屏
+                  </button>
+                  <button
+                    type="button"
+                    className={room.hostPlays ? "on" : ""}
+                    onClick={() => store.setHostPlays(true)}
+                  >
+                    我也玩
+                  </button>
+                </div>
+              </div>
+              <p className="setting-hint">
+                {room.hostPlays
+                  ? "你已自动加入并准备。大屏不是必需的；需要时用下面的独立链接打开。"
+                  : "你的页面就是大屏。想一起玩就切到「我也玩」，再另开一个大屏链接。"}
+              </p>
+            </section>
+          )}
+
+          {isHost && room.hostPlays && <ScreenLinkCard code={room.code} />}
           {isHost && <QrCard code={room.code} />}
 
           {isHost ? (
@@ -223,6 +261,7 @@ export function LobbyView() {
                         )}
                       </>
                     )}
+                    {room.hostPlays && <span className="chip">房主参赛</span>}
                     <span className="chip">已加入 {readyCount} 人</span>
                   </div>
 
@@ -429,7 +468,9 @@ export function LobbyView() {
             )}
             <span className="ready-summary">
               {onlineParticipants.length < 2
-                ? "房主不参赛，至少 2 名手机玩家才能开始"
+                ? room.hostPlays
+                  ? "房主已参赛，还需要至少 1 名玩家"
+                  : "房主不参赛，至少 2 名手机玩家才能开始"
                 : selected === "draw"
                   ? `已加入 ${readyCount}/${onlineParticipants.length} · 每人 ${drawSettings.roundsPerPlayer} 轮`
                   : `已加入 ${readyCount}/${onlineParticipants.length} · 目标 ${settings.targetScore} 分`}

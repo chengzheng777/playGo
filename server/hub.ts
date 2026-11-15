@@ -77,6 +77,7 @@ const profileSchema = z.object({
 });
 const chatSchema = z.object({ text: z.string().trim().min(1).max(MAX_CHAT_LEN) });
 const kickSchema = z.object({ playerId: z.string().trim().min(1).max(64) });
+const hostPlaysSchema = z.object({ enabled: z.boolean() });
 const pingSchema = z.object({ t: z.number() });
 const selectGameSchema = z.object({ gameId: z.string().trim().min(1).max(32) });
 const settingsSchema = z.object({
@@ -175,6 +176,11 @@ function parseClientMessage(raw: string): Parsed {
       const parsed = kickSchema.safeParse(msg.data);
       if (!parsed.success) return { kind: "invalid" };
       return { kind: "ok", msg: { ...base, type: "player.kick", data: parsed.data } };
+    }
+    case "room.hostplays": {
+      const parsed = hostPlaysSchema.safeParse(msg.data);
+      if (!parsed.success) return { kind: "invalid" };
+      return { kind: "ok", msg: { ...base, type: "room.hostplays", data: parsed.data } };
     }
     case "chat.send": {
       const parsed = chatSchema.safeParse(msg.data);
@@ -338,6 +344,8 @@ export class Hub {
         return void this.setProfile(conn, parsed.msg.data);
       case "player.kick":
         return void this.kickPlayer(conn, parsed.msg.data.playerId);
+      case "room.hostplays":
+        return void this.setHostPlays(conn, parsed.msg.data.enabled);
       case "chat.send":
         return void this.chat(conn, parsed.msg.data.text);
       case "game.select":
@@ -424,6 +432,9 @@ export class Hub {
     result.record.uno?.setConnected(result.player.id, true);
     result.record.color?.setConnected(result.player.id, true);
     result.record.draw?.setConnected(result.player.id, true);
+    const isScreen = result.player.role !== "player";
+    result.record.game?.setScreen(result.player.id, isScreen);
+    result.record.color?.setScreen(result.player.id, isScreen);
     this.send(conn, this.stateFor(result.record, result.player));
     this.broadcast(data.code);
   }
@@ -509,6 +520,22 @@ export class Hub {
     }
 
     this.rooms.removePlayer(record.room.code, playerId);
+    this.broadcast(record.room.code);
+  }
+
+  /** 房主切换是否参赛：仅大厅，参赛后自动 ready 并进入参赛名单 */
+  private setHostPlays(conn: Conn, enabled: boolean): void {
+    const record = this.roomOf(conn);
+    if (!record) {
+      this.replyError(conn, "ROOM_NOT_FOUND", "房间已失效，请重新创建");
+      return;
+    }
+    if (!this.isHost(conn, record)) return;
+    if (record.room.phase !== "lobby") {
+      this.replyError(conn, "BAD_PHASE", "游戏进行中不能切换房主参赛");
+      return;
+    }
+    this.rooms.setHostPlays(record.room.code, enabled);
     this.broadcast(record.room.code);
   }
 
@@ -606,11 +633,17 @@ export class Hub {
       return;
     }
 
-    // 房主是大屏 / 主持人，不参赛；队伍只由手机玩家组成
-    const participants = record.room.players.filter((player) => player.id !== record.room.hostId);
+    // 参赛者是 role=player 的在线玩家；房主参赛时也包含房主
+    const participants = record.room.players.filter((player) => player.role === "player");
     const connected = participants.filter((player) => player.connected);
     if (connected.length < 2) {
-      this.replyError(conn, "BAD_PHASE", "至少需要 2 名玩家（房主是大屏，不参赛）");
+      this.replyError(
+        conn,
+        "BAD_PHASE",
+        record.room.hostPlays
+          ? "至少需要 2 名参赛者（含房主）"
+          : "至少需要 2 名参赛者（房主是大屏，不参赛）",
+      );
       return;
     }
     const notReady = connected.filter((player) => !player.ready);
@@ -623,16 +656,22 @@ export class Hub {
       return;
     }
 
+    // 大屏（独立观战席或未参赛房主）只做展示，不进入参赛名单
+    const screenIds = record.room.players
+      .filter((player) => player.role !== "player" && player.connected)
+      .map((player) => player.id);
+
     if (record.gameId === "uno") {
-      record.uno = new UnoGame(participants, Date.now());
+      record.uno = new UnoGame(connected, Date.now());
       record.game = null;
       record.color = null;
       record.draw = null;
     } else if (record.gameId === "color") {
       record.color = new ColorGame(
-        record.room.players,
+        connected,
         {
           hostId: record.room.hostId,
+          screenIds,
           rounds: 3,
           shootSeconds: 40,
         },
@@ -643,18 +682,19 @@ export class Hub {
       record.draw = null;
     } else if (record.gameId === "draw") {
       // 离线玩家不进入本局，也不占画手轮次
-      record.draw = new DrawGame(
-        connected,
-        { hostId: record.room.hostId, ...record.drawSettings },
-        Date.now(),
-      );
+      record.draw = new DrawGame(connected, { ...record.drawSettings }, Date.now());
       record.game = null;
       record.uno = null;
       record.color = null;
     } else {
       record.game = new YiyuGame(
-        record.room.players,
-        { ...record.settings, hostId: record.room.hostId },
+        connected,
+        {
+          ...record.settings,
+          hostId: record.room.hostId,
+          hostPlays: record.room.hostPlays,
+          screenIds,
+        },
         Date.now(),
       );
       record.uno = null;
@@ -715,6 +755,11 @@ export class Hub {
     record.color = null;
     record.draw = null;
     for (const player of record.room.players) player.ready = false;
+    // 房主参赛是房间规则，不是一次性的准备动作；回大厅后保持参赛并自动 ready
+    if (record.room.hostPlays) {
+      const host = record.room.players.find((player) => player.id === record.room.hostId);
+      if (host) host.ready = true;
+    }
     record.version += 1;
     this.broadcast(record.room.code);
   }

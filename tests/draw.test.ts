@@ -20,11 +20,7 @@ function makePlayers(count: number): Player[] {
 
 function start(playerCount = 3, customWords?: string[]) {
   const players = makePlayers(playerCount).filter((player) => player.id !== HOST_ID);
-  return new DrawGame(
-    players,
-    { hostId: HOST_ID, roundSeconds: 60, roundsPerPlayer: 1, customWords },
-    0,
-  );
+  return new DrawGame(players, { roundSeconds: 60, roundsPerPlayer: 1, customWords }, 0);
 }
 
 function guessersOf(game: DrawGame): { id: string; name: string }[] {
@@ -188,7 +184,7 @@ describe("你画我猜", () => {
     offline.connected = false;
     const game = new DrawGame(
       players.filter((player) => player.id !== HOST_ID),
-      { hostId: HOST_ID, roundSeconds: 60, roundsPerPlayer: 1 },
+      { roundSeconds: 60, roundsPerPlayer: 1 },
       0,
     );
 
@@ -196,6 +192,15 @@ describe("你画我猜", () => {
     expect(view.scores.map((item) => item.id)).not.toContain(offline.id);
     expect(view.totalRounds).toBe(2);
     expect(guessersOf(game).map((player) => player.id)).not.toContain(offline.id);
+  });
+
+  it("房主参赛时进入画手轮次", () => {
+    const all = makePlayers(4);
+    all[0]!.role = "player";
+    const game = new DrawGame(all, { roundSeconds: 60, roundsPerPlayer: 1 }, 0);
+    const view = game.viewFor(HOST_ID);
+    expect(view.scores.some((player) => player.id === HOST_ID)).toBe(true);
+    expect(view.totalRounds).toBe(4);
   });
 
   it("自定义词追加进内置词池", () => {

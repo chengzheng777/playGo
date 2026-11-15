@@ -536,6 +536,11 @@ select {
   color: var(--accent);
 }
 
+.tag-screen {
+  background: rgba(56, 189, 248, 0.14);
+  color: #7dd3fc;
+}
+
 .tag-off {
   background: rgba(255, 112, 112, 0.14);
   color: var(--danger);
@@ -1824,6 +1829,93 @@ select {
   max-width: 840px;
 }
 
+/* 独立观战大屏：大厅等待页 */
+.screen-lobby {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.screen-lobby-main {
+  width: min(1000px, 100%);
+  margin: 0 auto;
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+@media (min-width: 900px) {
+  .screen-lobby-main {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.6fr);
+    align-items: start;
+  }
+}
+
+.screen-hero {
+  gap: 12px;
+  padding: clamp(22px, 4vw, 40px);
+  background:
+    radial-gradient(80% 120% at 0% 0%, rgba(139, 92, 246, 0.16), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
+}
+
+.screen-kicker {
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: #c4b5fd;
+}
+
+.screen-hero h1 {
+  font-size: clamp(28px, 6vw, 54px);
+  line-height: 1.1;
+}
+
+.screen-hero-text {
+  max-width: 52ch;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.screen-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.screen-hero-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 6px;
+}
+
+.screen-hero-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+}
+
+/* 房主参赛时的大屏链接卡片 */
+.screen-link-panel {
+  gap: 10px;
+}
+
+.screen-link-panel .btn-block {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  text-decoration: none;
+}
+
 .screen-mode .word-card {
   min-height: 300px;
 }
@@ -1920,6 +2012,23 @@ select {
   line-height: 1.6;
   color: var(--muted);
   max-width: 92%;
+}
+
+.phone-word {
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--team-color) 45%, var(--line));
+  border-radius: 14px;
+  background: var(--team-tint);
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.phone-word b {
+  margin-left: 6px;
+  color: var(--team-color);
+  font-size: 24px;
+  letter-spacing: 0.04em;
 }
 
 .screen-foot {

@@ -45,6 +45,7 @@ export function UnoGameView() {
   if (!room || !you || !uno) return null;
 
   const isHost = room.hostId === you.id;
+  const isScreen = you.role !== "player";
   const isTurn = uno.turnPlayerId === you.id;
   const turnPlayer = uno.players.find((player) => player.id === uno.turnPlayerId);
   const winner = uno.players.find((player) => player.id === uno.winnerId);
@@ -66,6 +67,7 @@ export function UnoGameView() {
         <span className="uno-color-pill" data-color={uno.currentColor}>
           {COLOR_NAME[uno.currentColor]}
         </span>
+        {isScreen && <span className="screen-pill">大屏</span>}
         <span className={`status status-${state.conn}`}>
           <i />
           {CONN_LABEL[state.conn] ?? state.conn}
@@ -156,7 +158,7 @@ export function UnoGameView() {
               <p className="wait-host">等房主开下一局</p>
             )}
           </section>
-        ) : isHost ? (
+        ) : isScreen ? (
           <p className="uno-hint">大屏观战 · 玩家在手机上出牌</p>
         ) : (
           <>

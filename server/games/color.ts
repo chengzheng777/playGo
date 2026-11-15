@@ -21,6 +21,8 @@ const PALETTE: ColorTarget[] = [
 
 export interface ColorOptions {
   hostId: string;
+  /** 能看到照片的大屏：独立观战席，或未参赛的房主 */
+  screenIds?: string[];
   rounds?: number;
   shootSeconds?: number;
 }
@@ -91,7 +93,7 @@ export class ColorGame {
   winnerId?: string;
 
   private readonly players: Entry[] = [];
-  private readonly hostId: string;
+  private readonly screenIds: Set<string>;
   private readonly totalRounds: number;
   private readonly shootMs: number;
   private results: ColorResultView[] = [];
@@ -101,12 +103,11 @@ export class ColorGame {
   private usedTargets: string[] = [];
 
   constructor(players: Player[], options: ColorOptions, now: number) {
-    this.hostId = options.hostId;
+    this.screenIds = new Set(options.screenIds ?? [options.hostId]);
     this.totalRounds = options.rounds ?? 3;
     this.shootMs = (options.shootSeconds ?? 40) * 1000;
 
     [...players]
-      .filter((player) => player.id !== options.hostId)
       .sort((a, b) => a.seat - b.seat)
       .forEach((player) => {
         this.players.push({
@@ -124,6 +125,12 @@ export class ColorGame {
   setConnected(playerId: string, connected: boolean): void {
     const player = this.players.find((item) => item.id === playerId);
     if (player) player.connected = connected;
+  }
+
+  /** 大屏可能在游戏开始后才加入/重连 */
+  setScreen(playerId: string, isScreen: boolean): void {
+    if (isScreen) this.screenIds.add(playerId);
+    else this.screenIds.delete(playerId);
   }
 
   action(playerId: string, action: ColorAction, now: number): boolean {
@@ -167,7 +174,7 @@ export class ColorGame {
   }
 
   viewFor(playerId: string): ColorView {
-    const isHost = playerId === this.hostId;
+    const isScreen = this.screenIds.has(playerId);
     return {
       gameId: "color",
       phase: this.phase,
@@ -188,7 +195,7 @@ export class ColorGame {
           ? []
           : this.results.map((result) => ({
               ...result,
-              photo: isHost ? result.photo : undefined,
+              photo: isScreen ? result.photo : undefined,
             })),
       winnerId: this.winnerId,
       lastEvent: this.lastEvent,

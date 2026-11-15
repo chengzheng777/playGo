@@ -30,34 +30,35 @@
 
 ## 2. 消息一览
 
-| type            | 方向      | data                                                                          | 说明                                        |
-| --------------- | --------- | ----------------------------------------------------------------------------- | ------------------------------------------- |
-| `welcome`       | S→C       | `{clientId, protocol, serverTime}`                                            | 连接建立后立即下发                          |
-| `room.create`   | C→S       | `{name, role, gameId?, avatar?}`                                              | 创建房间，可带上大厅里选好的游戏与本机头像  |
-| `room.created`  | S→C       | `{room, token}`                                                               | 仅创建者收到；`token` 用于重连              |
-| `room.join`     | C→S       | `{code, name, role, token?, avatar?}`                                         | 加入；带 `token` 即重连                     |
-| `room.state`    | S→C       | `{room, you, version, token, gameId, settings, game, uno, color, serverTime}` | 全量状态，任何变更后广播                    |
-| `room.left`     | S→C       | `{playerId, reason}`                                                          | 玩家离开                                    |
-| `player.ready`  | C→S       | `{ready}`                                                                     | 准备/取消                                   |
-| `player.update` | C→S       | `{name?, avatar?}`                                                            | 修改用户资料，随后广播                      |
-| `player.kick`   | C→S       | `{playerId}`                                                                  | 仅房主、仅大厅；移出玩家并使其 token 失效   |
-| `chat.send`     | C→S       | `{text}`                                                                      | 文本 ≤ 200 字；大厅与对局中都可发           |
-| `chat.message`  | S→C       | `{from, name, text, ts}`                                                      |                                             |
-| `game.select`   | C→S       | `{gameId}`                                                                    | 仅房主，仅大厅阶段                          |
-| `game.settings` | C→S       | `{settings}`                                                                  | 仅房主、仅大厅；目标分 3–20，回合 15–180 秒 |
-| `game.start`    | C→S       | `{}`                                                                          | 仅房主；至少 2 名已准备的手机玩家           |
-| `game.action`   | C→S       | `{action}`                                                                    | 见第 7 节                                   |
-| `game.back`     | C→S       | `{}`                                                                          | 仅房主；结束本局回大厅                      |
-| `ping` / `pong` | C→S / S→C | `{t}` / `{t, serverTime}`                                                     | 心跳，5 秒一次                              |
-| `ack`           | S→C       | `{id}`                                                                        | 确认收到某条客户端消息                      |
-| `error`         | S→C       | `{code, message, fatal}`                                                      | `fatal=true` 表示随后断开                   |
+| type             | 方向      | data                                                                          | 说明                                           |
+| ---------------- | --------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
+| `welcome`        | S→C       | `{clientId, protocol, serverTime}`                                            | 连接建立后立即下发                             |
+| `room.create`    | C→S       | `{name, role, gameId?, avatar?}`                                              | 创建房间，可带上大厅里选好的游戏与本机头像     |
+| `room.created`   | S→C       | `{room, token}`                                                               | 仅创建者收到；`token` 用于重连                 |
+| `room.join`      | C→S       | `{code, name, role, token?, avatar?}`                                         | 加入；带 `token` 即重连                        |
+| `room.state`     | S→C       | `{room, you, version, token, gameId, settings, game, uno, color, serverTime}` | 全量状态，任何变更后广播                       |
+| `room.left`      | S→C       | `{playerId, reason}`                                                          | 玩家离开                                       |
+| `player.ready`   | C→S       | `{ready}`                                                                     | 准备/取消                                      |
+| `player.update`  | C→S       | `{name?, avatar?}`                                                            | 修改用户资料，随后广播                         |
+| `player.kick`    | C→S       | `{playerId}`                                                                  | 仅房主、仅大厅；移出玩家/大屏并使其 token 失效 |
+| `room.hostplays` | C→S       | `{enabled}`                                                                   | 仅房主、仅大厅；切换房主是否参赛               |
+| `chat.send`      | C→S       | `{text}`                                                                      | 文本 ≤ 200 字；大厅与对局中都可发              |
+| `chat.message`   | S→C       | `{from, name, text, ts}`                                                      |                                                |
+| `game.select`    | C→S       | `{gameId}`                                                                    | 仅房主，仅大厅阶段                             |
+| `game.settings`  | C→S       | `{settings}`                                                                  | 仅房主、仅大厅；目标分 3–20，回合 15–180 秒    |
+| `game.start`     | C→S       | `{}`                                                                          | 仅房主；至少 2 名已准备的参赛者                |
+| `game.action`    | C→S       | `{action}`                                                                    | 见第 7 节                                      |
+| `game.back`      | C→S       | `{}`                                                                          | 仅房主；结束本局回大厅                         |
+| `ping` / `pong`  | C→S / S→C | `{t}` / `{t, serverTime}`                                                     | 心跳，5 秒一次                                 |
+| `ack`            | S→C       | `{id}`                                                                        | 确认收到某条客户端消息                         |
+| `error`          | S→C       | `{code, message, fatal}`                                                      | `fatal=true` 表示随后断开                      |
 
 ---
 
 ## 3. 数据结构
 
 ```ts
-type Role = "screen" | "player" | "spectator";
+type Role = "screen" | "player" | "spectator"; // screen: 未参赛房主大屏；spectator: 独立观战大屏
 type Phase = "lobby" | "playing" | "ended";
 
 interface Player {
@@ -83,7 +84,8 @@ interface Room {
   phase: Phase;
   players: Player[];
   createdAt: number;
-  maxPlayers: number; // 默认 8
+  maxPlayers: number; // 默认 8，只限制参赛者
+  hostPlays: boolean; // 房主是否也参赛；false 时房主页面就是大屏
 }
 
 interface RoomState {
@@ -122,6 +124,12 @@ interface YiyuSettings {
 - 断线后服务端保留座位 **90 秒**（`connected=false`），超时移除并广播。
 - 客户端重连策略：1s / 2s / 4s / 8s / 15s 上限，最多 10 次；成功后立刻 `ping` 校准延迟。
 - `version` 跳跃（收到 > 本地 + 1）：说明丢帧，发 `state.resync` 取全量。M0 本来就是全量，可先用「每次覆盖」简化。
+
+观战大屏用 `role: "spectator"` 加入同一房间：
+
+- 不占 `maxPlayers` 名参赛者容量，不进入参赛名单，不需要 `ready`，不能执行游戏动作。
+- 可以在 `lobby` / `playing` / `ended` 任意阶段加入；断线保留 90 秒，可凭 token 重连。
+- 网页路由为 `/s/:code`；普通玩家加入仍是 `/j/:code`。
 
 ---
 
@@ -433,3 +441,34 @@ interface DrawStroke {
 
 - `customWords` 追加到内置词库，不替换；单个词 1–20 字，最多 200 个，服务端会去重。
 - `room.state.drawSettings` 会同步给所有人，下一局生效。
+
+---
+
+## 13. 房主参赛与观战大屏
+
+### 13.1 切换房主模式
+
+```jsonc
+// C→S，仅房主、仅 lobby
+{ "v": 1, "type": "room.hostplays", "data": { "enabled": true } }
+```
+
+- `enabled=true`：房主 `role` 变为 `player`，自动 `ready=true`，进入参赛名单；`room.hostPlays=true`。
+- `enabled=false`：房主 `role` 变回 `screen`，`ready=false`，退出参赛名单；`room.hostPlays=false`。
+- 房主始终是 `hostId`，开始、改规则、踢人、结束本局等控制仍在房主设备上。
+- 独立大屏只是 `spectator`，没有任何房主控制。
+
+### 13.2 参赛者与观战者
+
+- 参赛者 = `role === "player"` 的玩家；房主参赛时包含房主。
+- `game.start` 要求至少 2 名在线参赛者且都已 `ready`；大屏不需要准备，也不计数。
+- 观战者 = `role === "spectator"`（独立大屏）或未参赛的房主 `role === "screen"`。
+- 房间列表人数只统计参赛者；观战大屏不占容量。
+
+### 13.3 观战视图裁剪
+
+- 一愚惊人：`word` 发给大屏（`screen` / `spectator`）和当前描述者；参赛房主不是描述者时拿不到。
+- 你画我猜：`word` 只发给当前画手，大屏与猜词者都拿不到。
+- UNO：`hand` 只发给参赛者；大屏 `hand=[]`、`playableIds=[]`。
+- 拍颜色：`results[].photo` 只发给大屏；参赛房主和其他玩家拿不到别人的照片。
+- 客户端用 `you.role` 区分大屏布局（`screen` / `spectator`）和玩家布局（`player`）。

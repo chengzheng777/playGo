@@ -40,6 +40,7 @@ export function ColorGameView() {
   if (!room || !you || !game) return null;
 
   const isHost = room.hostId === you.id;
+  const isScreen = you.role !== "player";
   const me = game.players.find((player) => player.id === you.id);
   const target = game.target;
   const remaining = Math.max(0, game.deadline - now);
@@ -68,7 +69,7 @@ export function ColorGameView() {
 
   return (
     <div
-      className={`color-game${isHost ? " is-screen" : ""}`}
+      className={`color-game${isScreen ? " is-screen" : ""}`}
       style={{ "--target": target.hex } as CSSProperties}
     >
       <header className="game-bar">
@@ -76,6 +77,7 @@ export function ColorGameView() {
         <span className="color-pill" style={{ background: target.hex }}>
           {target.name}
         </span>
+        {isScreen && <span className="screen-pill">大屏</span>}
         <span className={`status status-${state.conn}`}>
           <i />
           {CONN_LABEL[state.conn] ?? state.conn}
@@ -143,7 +145,7 @@ export function ColorGameView() {
               已拍 {submitted} / {game.players.filter((player) => player.connected).length}
             </div>
 
-            {!isHost && (
+            {!isScreen && (
               <div className="color-shot">
                 {me?.submitted ? (
                   <div className="color-preview">
@@ -183,13 +185,13 @@ export function ColorGameView() {
               </div>
             )}
 
-            {isHost && <p className="color-hint">大屏观战 · 玩家用手机拍照</p>}
+            {isScreen && <p className="color-hint">大屏观战 · 玩家用手机拍照</p>}
           </>
         )}
 
         {game.phase !== "shoot" && (
           <>
-            {isHost ? (
+            {isScreen ? (
               <div className="color-gallery">
                 {game.results.map((result, index) => (
                   <figure key={result.playerId} className={`polaroid${index === 0 ? " best" : ""}`}>

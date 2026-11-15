@@ -81,9 +81,10 @@ function GameRoom({ room, you, game, conn, serverOffset }: GameRoomProps) {
   const turn = game.turn;
   const phase = game.phase;
   const isHost = room.hostId === you.id;
-  const isScreen = isHost;
+  const isScreen = you.role !== "player";
   const isDescriber = !!turn && turn.describerId === you.id;
-  const canScore = isScreen || isDescriber;
+  // 未参赛的房主大屏可以代为计分；独立大屏只观战；参赛房主只能以描述者身份计分
+  const canScore = isDescriber || (isHost && !room.hostPlays);
   const remaining = turn ? Math.max(0, turn.deadline - now) : 0;
   const total = game.roundSeconds * 1000;
   const critical = phase === "turn" && remaining <= 10_000;
@@ -253,6 +254,7 @@ function GameRoom({ room, you, game, conn, serverOffset }: GameRoomProps) {
               remaining={remaining}
               total={total}
               critical={critical}
+              canScore={canScore}
             />
           ) : (
             <PhoneTurn
@@ -298,6 +300,7 @@ function ScreenTurn({
   remaining,
   total,
   critical,
+  canScore,
 }: {
   game: YiyuView;
   turn: NonNullable<YiyuView["turn"]>;
@@ -305,6 +308,7 @@ function ScreenTurn({
   remaining: number;
   total: number;
   critical: boolean;
+  canScore: boolean;
 }) {
   return (
     <section className="arena screen-arena">
@@ -326,17 +330,19 @@ function ScreenTurn({
 
       <TimerRing remaining={remaining} total={total} critical={critical} />
 
-      <div className="turn-actions">
-        <button
-          className="btn btn-primary btn-big"
-          onClick={() => store.gameAction({ type: "correct" })}
-        >
-          猜对了 +1
-        </button>
-        <button className="btn btn-ghost" onClick={() => store.gameAction({ type: "skip" })}>
-          跳过
-        </button>
-      </div>
+      {canScore && (
+        <div className="turn-actions">
+          <button
+            className="btn btn-primary btn-big"
+            onClick={() => store.gameAction({ type: "correct" })}
+          >
+            猜对了 +1
+          </button>
+          <button className="btn btn-ghost" onClick={() => store.gameAction({ type: "skip" })}>
+            跳过
+          </button>
+        </div>
+      )}
 
       {game.round > 0 && (
         <p className="screen-foot">
@@ -386,12 +392,18 @@ function PhoneTurn({
 
       <div className={`phone-card${isDescriber ? " is-describer" : ""}`}>
         <span className="phone-emoji">{isDescriber ? "👀" : "🙈"}</span>
-        <h2>{isDescriber ? "看电脑屏幕" : "把背转向电脑"}</h2>
+        <h2>{isDescriber ? "你来描述" : "把背转向电脑"}</h2>
         <p className="phone-sub">{isDescriber ? "你是描述者" : "别偷看，用耳朵和脑子"}</p>
         <p className="phone-hint">
           {isDescriber ? info.hint : `${turn.describerName} 正在用「${info.label}」描述`}
         </p>
       </div>
+
+      {isDescriber && turn.word && (
+        <div className="phone-word">
+          你要描述：<b>{turn.word}</b>
+        </div>
+      )}
 
       <TimerRing remaining={remaining} total={total} critical={critical} />
 

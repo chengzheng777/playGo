@@ -11,7 +11,6 @@ import type {
 import { DRAW_WORDS } from "./draw-words";
 
 export interface DrawOptions {
-  hostId: string;
   roundSeconds?: number;
   roundsPerPlayer?: number;
   /** 房主添加的词，追加到内置词库 */
@@ -98,9 +97,9 @@ export class DrawGame {
     this.roundMs = (options.roundSeconds ?? 80) * 1000;
     this.wordPool = buildWordPool(options.customWords);
 
-    // 只纳入在线玩家：离线玩家不占画手轮次
+    // 只纳入在线参赛者：离线玩家不占画手轮次；大屏不会传进来
     [...players]
-      .filter((player) => player.id !== options.hostId && player.connected)
+      .filter((player) => player.connected)
       .sort((a, b) => a.seat - b.seat)
       .forEach((player) => {
         this.players.push({

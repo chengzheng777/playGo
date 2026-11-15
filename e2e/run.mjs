@@ -497,6 +497,203 @@ async function runMobileFlow(port, pages) {
   await screenshot(second, "e2e-mobile-draw-reveal-phone");
 }
 
+async function runHostPlaysFlow(port, pages) {
+  console.log("\n房主参赛与大屏");
+
+  const host = await newPage(port, {
+    width: 1280,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  pages.push(host);
+  await host.call("Page.navigate", { url: BASE });
+  await waitFor(host, "!!document.querySelector('.game-card')");
+  await evaluate(
+    host,
+    `localStorage.setItem("playgo:profile", JSON.stringify({ name: "HostPlayer", avatar: { text: "H", color: "#fb7185" } }))`,
+  );
+  await host.call("Page.navigate", { url: BASE });
+  await waitFor(host, "!!document.querySelector('.game-card')");
+  await evaluate(
+    host,
+    "[...document.querySelectorAll('.game-card')].find((el) => el.textContent.includes('你画我猜'))?.click()",
+  );
+  await sleep(250);
+
+  let code = null;
+  for (let attempt = 0; attempt < 8 && !code; attempt++) {
+    await clickByText(host, "创建「");
+    await sleep(700);
+    code = await evaluate(host, "document.querySelector('.room-code b')?.textContent ?? null");
+  }
+  check("房主参赛流程创建房间", Boolean(code), String(code));
+
+  await clickByText(host, "我也玩");
+  check(
+    "房主切换为参赛",
+    Boolean(
+      await waitFor(
+        host,
+        "[...document.querySelectorAll('.host-mode-panel .segmented .on')].some((el) => el.textContent.includes('我也玩'))",
+      ),
+    ),
+  );
+  check(
+    "房主参赛后自动准备",
+    Boolean(
+      await waitFor(
+        host,
+        "[...document.querySelectorAll('.player')].some((el) => el.textContent.includes('HostPlayer') && el.querySelector('.tag-ready'))",
+      ),
+    ),
+  );
+  const hostTag = await evaluate(
+    host,
+    "[...document.querySelectorAll('.player')].find((el) => el.textContent.includes('HostPlayer'))?.querySelector('.tag-host')?.textContent ?? ''",
+  );
+  check("房主参赛后标签为房主", hostTag.trim() === "房主", hostTag.trim());
+
+  const screenUrl = await waitFor(
+    host,
+    "document.querySelector('.screen-link-panel .url-line code')?.textContent ?? ''",
+  );
+  check("房主参赛后出现独立大屏链接", Boolean(screenUrl?.includes("/s/")), screenUrl);
+  check("房主参赛大厅无横向溢出", await noHorizontalOverflow(host));
+  await screenshot(host, "e2e-host-plays-lobby");
+
+  await host.call("Emulation.setDeviceMetricsOverride", {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 2,
+    mobile: true,
+  });
+  await sleep(300);
+  check("移动端房主参赛大厅无横向溢出", await noHorizontalOverflow(host));
+  await screenshot(host, "e2e-host-plays-mobile");
+  await host.call("Emulation.setDeviceMetricsOverride", {
+    width: 1280,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await sleep(300);
+
+  const bigScreen = await newPage(port, {
+    width: 1280,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  pages.push(bigScreen);
+  // 大屏不依赖本机用户资料：清掉 profile 后仍应能直接连上
+  await bigScreen.call("Page.navigate", { url: BASE });
+  await waitFor(bigScreen, "!!document.querySelector('.home')");
+  await evaluate(bigScreen, 'localStorage.removeItem("playgo:profile")');
+  await bigScreen.call("Page.navigate", { url: screenUrl });
+  check(
+    "大屏大厅等待页可打开",
+    Boolean(await waitFor(bigScreen, "!!document.querySelector('.screen-hero')")),
+  );
+  check(
+    "大屏不需要本机用户资料",
+    (await evaluate(bigScreen, "!document.querySelector('.onboarding')")) === true,
+  );
+  check(
+    "大屏大厅没有准备按钮",
+    (await evaluate(bigScreen, "!document.querySelector('.current-game .btn')")) === true,
+  );
+  check(
+    "大屏大厅显示当前游戏",
+    (await evaluate(
+      bigScreen,
+      "document.querySelector('.screen-hero')?.textContent.includes('你画我猜')",
+    )) === true,
+  );
+  await screenshot(bigScreen, "e2e-big-screen-lobby");
+
+  const mate = await joinAsPhone(
+    port,
+    pages,
+    code,
+    "HostMate",
+    { text: "M", color: "#38bdf8" },
+    { width: 390, height: 844, deviceScaleFactor: 2, mobile: true },
+  );
+
+  await clickByText(host, "开始游戏");
+  check(
+    "房主 + 1 名玩家可以开局",
+    Boolean(await waitFor(host, "!!document.querySelector('.draw-game')")),
+  );
+  await waitFor(mate, "!!document.querySelector('.draw-game')");
+  check(
+    "大屏从大厅自动进入游戏",
+    Boolean(await waitFor(bigScreen, "!!document.querySelector('.draw-game')")),
+  );
+  check(
+    "大屏 URL 保持 /s/ 路由",
+    (await evaluate(bigScreen, "location.pathname.startsWith('/s/')")) === true,
+  );
+  check(
+    "大屏没有画板/猜词/词语",
+    (await evaluate(
+      bigScreen,
+      "!document.querySelector('.draw-pad') && !document.querySelector('.draw-guess') && !document.querySelector('.draw-word')",
+    )) === true,
+  );
+  check(
+    "大屏没有房主结束按钮",
+    (await evaluate(
+      bigScreen,
+      "!(document.querySelector('.game-bar-actions')?.textContent ?? '').includes('结束')",
+    )) === true,
+  );
+  check(
+    "大屏看得到两位参赛者比分",
+    (await evaluate(bigScreen, "document.querySelectorAll('.draw-scores .draw-player').length")) ===
+      2,
+  );
+  check("大屏无横向溢出", await noHorizontalOverflow(bigScreen));
+
+  const lateScreen = await newPage(port, {
+    width: 1280,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  pages.push(lateScreen);
+  await lateScreen.call("Page.navigate", { url: screenUrl });
+  check(
+    "大屏可以在游戏中加入",
+    Boolean(await waitFor(lateScreen, "!!document.querySelector('.draw-game')")),
+  );
+  check(
+    "迟到大屏也没有猜词控件",
+    (await evaluate(
+      lateScreen,
+      "!document.querySelector('.draw-guess') && !document.querySelector('.draw-word')",
+    )) === true,
+  );
+
+  check(
+    "房主是玩家视角",
+    (await evaluate(
+      host,
+      "!!document.querySelector('.draw-game') && (!!document.querySelector('.draw-pad') || !!document.querySelector('.draw-guess'))",
+    )) === true,
+  );
+  check(
+    "房主仍有结束按钮",
+    (await evaluate(
+      host,
+      "(document.querySelector('.game-bar-actions')?.textContent ?? '').includes('结束')",
+    )) === true,
+  );
+  await screenshot(host, "e2e-host-plays");
+  await screenshot(bigScreen, "e2e-big-screen");
+}
+
 async function main() {
   fs.mkdirSync(ARTIFACTS, { recursive: true });
 
@@ -652,6 +849,7 @@ async function main() {
     await screenshot(phone, "e2e-phone");
 
     await runMobileFlow(port, pages);
+    await runHostPlaysFlow(port, pages);
 
     console.log(`\n通过 ${passed} 项，失败 ${failures.length} 项`);
     if (failures.length > 0) process.exitCode = 1;

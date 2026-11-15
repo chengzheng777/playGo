@@ -30,8 +30,12 @@ export function PlayerList({
               {player.id === youId && <span className="me">你</span>}
             </span>
             <span className="tags">
-              {player.id === hostId && <span className="tag tag-host">大屏</span>}
-              {player.ready && player.id !== hostId && (
+              {player.id === hostId ? (
+                <span className="tag tag-host">{player.role === "screen" ? "大屏" : "房主"}</span>
+              ) : player.role === "spectator" ? (
+                <span className="tag tag-screen">大屏</span>
+              ) : null}
+              {player.role === "player" && player.ready && (
                 <span className="tag tag-ready">已加入</span>
               )}
               {!player.connected && <span className="tag tag-off">掉线</span>}

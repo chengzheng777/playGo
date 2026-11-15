@@ -91,17 +91,20 @@ export class RoomManager {
   list(limit = 30): RoomSummary[] {
     return [...this.rooms.values()]
       .filter((record) => record.room.players.some((player) => player.connected))
-      .map((record) => ({
-        code: record.room.code,
-        hostName:
-          record.room.players.find((player) => player.id === record.room.hostId)?.name ?? "房主",
-        gameId: record.gameId,
-        players: record.room.players.length,
-        online: record.room.players.filter((player) => player.connected).length,
-        capacity: record.room.maxPlayers,
-        phase: record.room.phase,
-        createdAt: record.room.createdAt,
-      }))
+      .map((record) => {
+        const participants = record.room.players.filter((player) => player.role !== "spectator");
+        return {
+          code: record.room.code,
+          hostName:
+            record.room.players.find((player) => player.id === record.room.hostId)?.name ?? "房主",
+          gameId: record.gameId,
+          players: participants.length,
+          online: participants.filter((player) => player.connected).length,
+          capacity: record.room.maxPlayers,
+          phase: record.room.phase,
+          createdAt: record.room.createdAt,
+        };
+      })
       .sort((a, b) => b.createdAt - a.createdAt)
       .slice(0, limit);
   }
@@ -134,6 +137,7 @@ export class RoomManager {
       players: [player],
       createdAt: Date.now(),
       maxPlayers: MAX_PLAYERS,
+      hostPlays: false,
     };
     const token = newToken();
     const record: RoomRecord = {
@@ -161,13 +165,22 @@ export class RoomManager {
   ): JoinResult {
     const record = this.rooms.get(code);
     if (!record) return { ok: false, error: "ROOM_NOT_FOUND" };
-    if (record.room.phase !== "lobby") return { ok: false, error: "BAD_PHASE" };
-    if (record.room.players.length >= record.room.maxPlayers)
+    // 观战大屏可以随时加入；普通玩家仍只允许大厅加入
+    if (role !== "spectator" && record.room.phase !== "lobby") {
+      return { ok: false, error: "BAD_PHASE" };
+    }
+    const participants = record.room.players.filter((player) => player.role !== "spectator");
+    if (role !== "spectator" && participants.length >= record.room.maxPlayers) {
       return { ok: false, error: "ROOM_FULL" };
+    }
 
     const trimmed = name.trim().slice(0, 16);
     if (!trimmed) return { ok: false, error: "NAME_TAKEN" };
-    if (record.room.players.some((p) => p.name.toLowerCase() === trimmed.toLowerCase())) {
+    // 大屏可以重名，方便多开；普通玩家仍保持昵称唯一
+    if (
+      role !== "spectator" &&
+      record.room.players.some((p) => p.name.toLowerCase() === trimmed.toLowerCase())
+    ) {
       return { ok: false, error: "NAME_TAKEN" };
     }
 
@@ -181,6 +194,7 @@ export class RoomManager {
       connected: true,
       joinedAt: Date.now(),
     };
+    // 观战大屏不参与准备；房主参赛由 room.hostplays 统一设置 ready
     const token = newToken();
     record.tokens.set(player.id, token);
     record.room.players.push(player);
@@ -222,8 +236,17 @@ export class RoomManager {
     }
 
     if (record.room.hostId === playerId) {
-      const next = record.room.players.find((p) => p.connected) ?? record.room.players[0];
+      const next =
+        record.room.players.find((p) => p.connected && p.role === "player") ??
+        record.room.players.find((p) => p.connected) ??
+        record.room.players[0];
       record.room.hostId = next.id;
+      if (next.role === "spectator") {
+        next.role = "screen";
+        record.room.hostPlays = false;
+      } else {
+        record.room.hostPlays = next.role === "player";
+      }
     }
 
     record.version += 1;
@@ -234,11 +257,27 @@ export class RoomManager {
     const record = this.rooms.get(code);
     const player = record?.room.players.find((p) => p.id === playerId);
     if (!record || !player) return undefined;
+    // 只有参赛者能准备；大屏和未参赛房主忽略
+    if (player.role !== "player") return player;
     if (player.ready === ready) return player;
     player.ready = ready;
     record.version += 1;
     record.lastActiveAt = Date.now();
     return player;
+  }
+
+  /** 房主切换是否参赛；参赛时自动 ready，退出时取消 ready */
+  setHostPlays(code: string, enabled: boolean): boolean {
+    const record = this.rooms.get(code);
+    if (!record) return false;
+    const host = record.room.players.find((player) => player.id === record.room.hostId);
+    if (!host) return false;
+    record.room.hostPlays = enabled;
+    host.role = enabled ? "player" : "screen";
+    host.ready = enabled;
+    record.version += 1;
+    record.lastActiveAt = Date.now();
+    return true;
   }
 
   setSettings(code: string, settings: YiyuSettings): boolean {

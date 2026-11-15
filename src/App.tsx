@@ -8,21 +8,23 @@ import { HomeView } from "./views/HomeView";
 import { JoinView } from "./views/JoinView";
 import { LobbyView } from "./views/LobbyView";
 import { OnboardingView } from "./views/OnboardingView";
+import { ScreenLobbyView, ScreenWaitView } from "./views/ScreenView";
 import { UnoGameView } from "./views/UnoView";
 
 export function App() {
   const state = useAppState();
   const inGame = Boolean(state.game || state.uno || state.color || state.draw);
+  const isScreen = state.view === "screen";
 
   return (
     <div className="app">
-      {!state.profile ? (
+      {!state.profile && !isScreen ? (
         <OnboardingView />
       ) : (
         <>
           {state.view === "home" && <HomeView />}
           {state.view === "join" && <JoinView />}
-          {state.view === "lobby" &&
+          {(state.view === "lobby" || isScreen) &&
             (state.game ? (
               <GameView />
             ) : state.uno ? (
@@ -31,6 +33,12 @@ export function App() {
               <ColorGameView />
             ) : state.draw ? (
               <DrawGameView />
+            ) : isScreen ? (
+              state.room ? (
+                <ScreenLobbyView />
+              ) : (
+                <ScreenWaitView />
+              )
             ) : (
               <LobbyView />
             ))}

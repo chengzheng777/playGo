@@ -106,6 +106,12 @@ async function main() {
 
   const createdState = await host.next((m) => m.type === "room.state" && m.data.room.code === code);
   check("建房时带上所选游戏", createdState.data.gameId === "yiyu");
+  check(
+    "默认房主只做大屏、不参赛",
+    createdState.data.room.hostPlays === false &&
+      createdState.data.you.role === "screen" &&
+      createdState.data.you.ready === false,
+  );
 
   const list1 = await fetch(`${BASE}/api/rooms`).then((r) => r.json());
   const listed = list1.rooms.find((room) => room.code === code);
@@ -247,7 +253,6 @@ async function main() {
     hostStart.data.game.teams.every((team) => team.members.length === 1),
   );
   check("大屏能看到词", typeof hostStart.data.game.turn.word === "string");
-  check("手机玩家看不到词", !bobStart.data.game.turn.word && !carolStart.data.game.turn.word);
 
   const playerStates = [
     { client: guest2, state: bobStart },
@@ -257,6 +262,8 @@ async function main() {
   const descEntry = playerStates.find((entry) => entry.state.data.you.id === describerId);
   const otherEntry = playerStates.find((entry) => entry !== descEntry);
   check("能找到描述者", descEntry !== undefined);
+  check("描述者手机能看到词", typeof descEntry?.state.data.game.turn.word === "string");
+  check("其他手机玩家看不到词", !otherEntry?.state.data.game.turn.word);
 
   otherEntry?.client.send("game.action", { action: { type: "correct" } });
   host.send("game.action", { action: { type: "correct" } });
@@ -523,6 +530,113 @@ async function main() {
   kickB.close();
   kickA.close();
   kickRejoin.close();
+
+  // ---- 房主参赛与独立大屏 ----
+  console.log("\n房主参赛与大屏");
+  const hpHost = new Client("参赛房主");
+  await hpHost.connect();
+  hpHost.send("room.create", { name: "PlayHost", role: "screen", gameId: "draw" });
+  const hpCreated = await hpHost.next((m) => m.type === "room.created");
+  const hpCode = hpCreated.data.room.code;
+
+  hpHost.send("room.hostplays", { enabled: true });
+  const hpState = await hpHost.next(
+    (m) => m.type === "room.state" && m.data.room.hostPlays === true,
+  );
+  check(
+    "房主参赛后自动准备",
+    hpState.data.you.role === "player" && hpState.data.you.ready === true,
+  );
+
+  const hpPlayer = new Client("陪玩玩家");
+  await hpPlayer.connect();
+  hpPlayer.send("room.join", { code: hpCode, name: "PlayMate", role: "player" });
+  await hpPlayer.next((m) => m.type === "room.state" && m.data.you.name === "PlayMate");
+  hpPlayer.send("player.ready", { ready: true });
+  await hpHost.next(
+    (m) =>
+      m.type === "room.state" && m.data.room.players.some((p) => p.name === "PlayMate" && p.ready),
+  );
+
+  const hpScreenKick = new Client("待踢大屏");
+  await hpScreenKick.connect();
+  hpScreenKick.send("room.join", { code: hpCode, name: "大屏", role: "spectator" });
+  const hpScreenKickState = await hpScreenKick.next(
+    (m) => m.type === "room.state" && m.data.you.role === "spectator",
+  );
+  check("观战大屏可以加入", hpScreenKickState.data.you.role === "spectator");
+  check(
+    "观战大屏不占参赛名额",
+    hpScreenKickState.data.room.players.filter((p) => p.role === "player").length === 2,
+  );
+  hpHost.send("player.kick", { playerId: hpScreenKickState.data.you.id });
+  const hpKicked = await hpScreenKick.next((m) => m.type === "error");
+  check("房主可以移出大屏", hpKicked.data.code === "KICKED");
+
+  hpPlayer.send("room.hostplays", { enabled: false });
+  const hpDenied = await hpPlayer.next((m) => m.type === "error");
+  check("非房主不能切换房主参赛", hpDenied.data.code === "NOT_HOST");
+
+  const hpScreen = new Client("大屏");
+  await hpScreen.connect();
+  hpScreen.send("room.join", { code: hpCode, name: "大屏", role: "spectator" });
+  const hpScreenState = await hpScreen.next(
+    (m) => m.type === "room.state" && m.data.you.role === "spectator",
+  );
+  check("参赛房主 + 1 名玩家满足开局条件", hpScreenState.data.room.hostPlays === true);
+
+  hpHost.send("game.start", {});
+  const hpHostGame = await hpHost.next(
+    (m) => m.type === "room.state" && m.data.draw?.phase === "draw",
+  );
+  const hpScreenGame = await hpScreen.next(
+    (m) => m.type === "room.state" && m.data.draw?.phase === "draw",
+  );
+  check(
+    "房主以玩家身份开局",
+    hpHostGame.data.you.role === "player" &&
+      hpHostGame.data.draw.scores.some((player) => player.id === hpHostGame.data.you.id),
+  );
+  check("大屏拿不到你画我猜的词", hpScreenGame.data.draw.word === undefined);
+  check(
+    "大屏不进入比分",
+    hpScreenGame.data.draw.scores.every((player) => player.id !== hpScreenState.data.you.id),
+  );
+
+  const hpList = await fetch(`${BASE}/api/rooms`).then((r) => r.json());
+  const hpSummary = hpList.rooms.find((room) => room.code === hpCode);
+  check("大屏不计入房间人数", hpSummary?.players === 2);
+
+  const hpScreenLate = new Client("迟到大屏");
+  await hpScreenLate.connect();
+  hpScreenLate.send("room.join", { code: hpCode, name: "大屏", role: "spectator" });
+  const hpLateState = await hpScreenLate.next(
+    (m) => m.type === "room.state" && m.data.you.role === "spectator" && m.data.draw,
+  );
+  check("大屏可以在游戏中加入", Boolean(hpLateState.data.draw));
+
+  if (hpHostGame.data.draw.drawerId === hpHostGame.data.you.id) {
+    hpHost.send("game.action", {
+      action: {
+        type: "stroke",
+        strokeId: "host-s1",
+        points: [{ x: 0.5, y: 0.5 }],
+        color: "#111827",
+        width: 6,
+        start: true,
+      },
+    });
+    const hpDelta = await hpScreen.next((m) => m.type === "draw.delta");
+    check("参赛房主可以画画", hpDelta.data.points.length === 1);
+  } else {
+    check("参赛房主进入猜词者名单", hpHostGame.data.draw.scores.length === 2);
+  }
+
+  hpHost.close();
+  hpPlayer.close();
+  hpScreen.close();
+  hpScreenLate.close();
+  hpScreenKick.close();
 
   host.close();
   guest2.close();

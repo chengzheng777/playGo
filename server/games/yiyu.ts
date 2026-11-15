@@ -42,8 +42,12 @@ interface TurnState {
 export interface YiyuOptions {
   targetScore: number;
   roundSeconds: number;
-  /** 大屏玩家，不参赛，但能看到词、也能代为计分 */
+  /** 房主 ID；未参赛时房主大屏能看到词、也能代为计分 */
   hostId: string;
+  /** 房主是否也参赛 */
+  hostPlays?: boolean;
+  /** 观战大屏 ID；能看到词，但不能操作 */
+  screenIds?: string[];
 }
 
 function normalize(text: string): string {
@@ -70,6 +74,8 @@ export class YiyuGame {
   private readonly targetScore: number;
   private readonly roundMs: number;
   private readonly hostId: string;
+  private readonly hostPlays: boolean;
+  private readonly screenIds: Set<string>;
   private readonly teams: Record<YiyuTeamId, Team> = {
     A: { score: 0, cursor: 0, members: [] },
     B: { score: 0, cursor: 0, members: [] },
@@ -86,10 +92,11 @@ export class YiyuGame {
     this.targetScore = options.targetScore;
     this.roundMs = options.roundSeconds * 1000;
     this.hostId = options.hostId;
+    this.hostPlays = options.hostPlays ?? false;
+    this.screenIds = new Set(options.screenIds ?? [options.hostId]);
 
-    // 房主是大屏 / 主持人，不参加分队
+    // 传进来的就是参赛者；房主参赛时也在里面，大屏不会传进来
     [...players]
-      .filter((player) => player.id !== options.hostId)
       .sort((a, b) => a.seat - b.seat)
       .forEach((player, index) => {
         const team: YiyuTeamId = index % 2 === 0 ? "A" : "B";
@@ -110,13 +117,21 @@ export class YiyuGame {
     if (member) member.connected = connected;
   }
 
+  /** 大屏可能在游戏开始后才加入/重连 */
+  setScreen(playerId: string, isScreen: boolean): void {
+    if (isScreen) this.screenIds.add(playerId);
+    else this.screenIds.delete(playerId);
+  }
+
   action(playerId: string, action: YiyuAction, now: number): boolean {
     const turn = this.turn;
     if (this.phase !== "turn" || !turn) return false;
 
     if (action.type === "correct" || action.type === "skip") {
-      // 大屏（房主）和当前描述者都能计分
-      if (playerId !== turn.describerId && playerId !== this.hostId) return false;
+      // 当前描述者总能计分；未参赛的房主大屏可以代为计分，参赛房主只能以描述者身份计分
+      const canScore =
+        playerId === turn.describerId || (playerId === this.hostId && !this.hostPlays);
+      if (!canScore) return false;
       this.resolve(action.type, now);
       return true;
     }
@@ -155,7 +170,8 @@ export class YiyuGame {
 
   viewFor(playerId: string): YiyuView {
     const turn = this.turn;
-    const isScreen = playerId === this.hostId;
+    const isScreen = this.screenIds.has(playerId);
+    const isDescriber = turn?.describerId === playerId;
     const reveal = this.phase !== "turn";
 
     return {
@@ -182,7 +198,7 @@ export class YiyuGame {
             describerName: turn.describerName,
             mode: turn.mode,
             deadline: turn.deadline,
-            word: isScreen || reveal ? turn.word : undefined,
+            word: isScreen || isDescriber || reveal ? turn.word : undefined,
             guesses: turn.guesses.map((guess) => ({ ...guess })),
             result: turn.result,
             winnerName: turn.winnerName,

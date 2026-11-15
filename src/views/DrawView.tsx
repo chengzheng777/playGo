@@ -281,6 +281,7 @@ export function DrawGameView() {
   if (!room || !you || !game) return null;
 
   const isHost = room.hostId === you.id;
+  const isScreen = you.role !== "player";
   const isDrawer = game.drawerId === you.id;
   const remaining = Math.max(0, game.deadline - now);
   const seconds = Math.ceil(remaining / 1000);
@@ -303,6 +304,7 @@ export function DrawGameView() {
     <div className="draw-game">
       <header className="game-bar">
         <span className="room-pill">房间 {room.code}</span>
+        {isScreen && <span className="screen-pill">大屏</span>}
         <span className="draw-round">
           第 {game.round} / {game.totalRounds} 轮
         </span>
@@ -378,7 +380,7 @@ export function DrawGameView() {
           )}
         </div>
 
-        {!isHost && isDrawer && game.phase === "draw" && (
+        {!isScreen && isDrawer && game.phase === "draw" && (
           <>
             <div className="draw-word">你要画：{game.word}</div>
             <div className="draw-tools">
@@ -420,11 +422,11 @@ export function DrawGameView() {
           </>
         )}
 
-        {!isHost && !isDrawer && game.phase === "draw" && guessed && (
+        {!isScreen && !isDrawer && game.phase === "draw" && guessed && (
           <p className="draw-guessed">你已猜对（+{myGuess?.points ?? 0}），等其他人继续</p>
         )}
 
-        {!isHost && !isDrawer && game.phase === "draw" && !guessed && (
+        {!isScreen && !isDrawer && game.phase === "draw" && !guessed && (
           <form
             className="draw-guess"
             style={

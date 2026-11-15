@@ -21,9 +21,10 @@ import { DEFAULT_DRAW_SETTINGS, DEFAULT_SETTINGS } from "../shared/protocol";
 
 const NAME_KEY = "playgo:name";
 const TOKEN_PREFIX = "playgo:token:";
+const SCREEN_TOKEN_PREFIX = "playgo:screen-token:";
 const MAX_CHAT_HISTORY = 100;
 
-export type View = "home" | "join" | "lobby";
+export type View = "home" | "join" | "lobby" | "screen";
 export type ConnState = "idle" | "connecting" | "open" | "reconnecting" | "closed";
 
 /** 本机用户资料，存在 localStorage，第一次打开时创建 */
@@ -101,10 +102,19 @@ function readToken(code: string): string | null {
   }
 }
 
+function readScreenToken(code: string): string | null {
+  try {
+    return localStorage.getItem(SCREEN_TOKEN_PREFIX + code);
+  } catch {
+    return null;
+  }
+}
+
 function readRoute(): { view: View; code: string } {
-  const match = /^\/([jr])\/([A-Za-z0-9]{4})$/.exec(location.pathname);
+  const match = /^\/([jsr])\/([A-Za-z0-9]{4})$/.exec(location.pathname);
   if (!match) return { view: "home", code: "" };
-  return { view: match[1] === "j" ? "join" : "lobby", code: match[2]?.toUpperCase() };
+  const view: View = match[1] === "j" ? "join" : match[1] === "s" ? "screen" : "lobby";
+  return { view, code: match[2]?.toUpperCase() };
 }
 
 class Store {
@@ -155,6 +165,16 @@ class Store {
         queueMicrotask(() => this.openSocket(true));
       } else {
         this.state = { ...base, view: "join" };
+      }
+    } else if (route.view === "screen") {
+      const token = readScreenToken(route.code);
+      if (token) {
+        this.session = { code: route.code, token };
+        this.state = { ...base, view: "screen", conn: "connecting" };
+        queueMicrotask(() => this.openSocket(true));
+      } else {
+        this.state = { ...base, view: "screen", conn: "connecting", busy: true };
+        queueMicrotask(() => this.joinAsScreen(route.code));
       }
     } else {
       this.state = base;
@@ -237,10 +257,40 @@ class Store {
     this.openSocket(false);
   }
 
+  /** 观战大屏：不需要本机资料，用独立 spectator 身份加入 */
+  joinAsScreen(code: string): void {
+    this.closedByUs = false;
+    this.set({
+      view: "screen",
+      joinCode: code,
+      conn: "connecting",
+      busy: true,
+      error: null,
+    });
+    this.send({
+      v: 1,
+      type: "room.join",
+      data: {
+        code,
+        name: "大屏",
+        role: "spectator",
+        avatar: { text: "📺", color: "#38bdf8" },
+      },
+    });
+    this.openSocket(false);
+  }
+
   toggleReady(): void {
     const you = this.state.you;
     if (!you) return;
     this.send({ v: 1, type: "player.ready", data: { ready: !you.ready } });
+  }
+
+  /** 房主切换是否也参赛（仅大厅；由服务端校验） */
+  setHostPlays(enabled: boolean): void {
+    const { room, you } = this.state;
+    if (!room || !you || room.hostId !== you.id) return;
+    this.send({ v: 1, type: "room.hostplays", data: { enabled } });
   }
 
   /** 房主移出单个玩家（仅大厅生效） */
@@ -256,7 +306,7 @@ class Store {
     const { room, you } = this.state;
     if (!room || !you || room.hostId !== you.id) return;
     for (const player of room.players) {
-      if (player.id === room.hostId || player.ready) continue;
+      if (player.id === room.hostId || player.role !== "player" || player.ready) continue;
       this.send({ v: 1, type: "player.kick", data: { playerId: player.id } });
     }
   }
@@ -320,7 +370,8 @@ class Store {
 
     if (this.session) {
       try {
-        localStorage.removeItem(TOKEN_PREFIX + this.session.code);
+        const prefix = this.state.view === "screen" ? SCREEN_TOKEN_PREFIX : TOKEN_PREFIX;
+        localStorage.removeItem(prefix + this.session.code);
       } catch {
         /* ignore */
       }
@@ -369,7 +420,8 @@ class Store {
     if (!token) return;
     this.session = { code, token };
     try {
-      localStorage.setItem(TOKEN_PREFIX + code, token);
+      const prefix = this.state.view === "screen" ? SCREEN_TOKEN_PREFIX : TOKEN_PREFIX;
+      localStorage.setItem(prefix + code, token);
     } catch {
       /* ignore */
     }
@@ -521,9 +573,10 @@ class Store {
           serverTime,
         } = message.data;
         this.applySession(room.code, token);
+        const isScreenView = this.state.view === "screen";
         const wasLobby = this.state.view === "lobby";
         this.set({
-          view: "lobby",
+          view: isScreenView ? "screen" : "lobby",
           room,
           you,
           version,
@@ -539,7 +592,7 @@ class Store {
           drawEvent: null,
           serverOffset: serverTime - Date.now(),
         });
-        if (!wasLobby) history.replaceState(null, "", `/r/${room.code}`);
+        if (!wasLobby && !isScreenView) history.replaceState(null, "", `/r/${room.code}`);
         return;
       }
 
@@ -581,7 +634,43 @@ class Store {
   }
 
   private onError(code: ErrorCode, text: string): void {
+    // 大屏的旧 token 失效：清掉后重新以 spectator 加入，不把用户丢回首页
+    if (code === "BAD_TOKEN" && this.state.view === "screen") {
+      if (this.session) {
+        try {
+          localStorage.removeItem(SCREEN_TOKEN_PREFIX + this.session.code);
+        } catch {
+          /* ignore */
+        }
+      }
+      this.session = null;
+      this.joinAsScreen(this.state.joinCode);
+      return;
+    }
+
     const sessionGone = code === "ROOM_NOT_FOUND" || code === "BAD_TOKEN" || code === "KICKED";
+
+    if (sessionGone && this.state.view === "screen") {
+      this.session = null;
+      this.queue = [];
+      this.set({
+        room: null,
+        you: null,
+        chat: [],
+        busy: false,
+        conn: "closed",
+        error: text,
+        gameId: null,
+        settings: { ...DEFAULT_SETTINGS },
+        drawSettings: { ...DEFAULT_DRAW_SETTINGS },
+        game: null,
+        uno: null,
+        color: null,
+        draw: null,
+        drawEvent: null,
+      });
+      return;
+    }
 
     if (sessionGone && this.state.view === "lobby") {
       this.session = null;

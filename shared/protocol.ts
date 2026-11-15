@@ -44,6 +44,8 @@ export interface Room {
   players: Player[];
   createdAt: number;
   maxPlayers: number;
+  /** 房主是否也作为玩家参赛；false 时房主页面就是大屏 */
+  hostPlays: boolean;
 }
 
 /** 大厅房间列表里的一条，不含玩家隐私字段 */
@@ -367,6 +369,7 @@ export type ClientMessage =
   | (Envelope & { type: "player.ready"; data: { ready: boolean } })
   | (Envelope & { type: "player.update"; data: { name?: string; avatar?: Avatar } })
   | (Envelope & { type: "player.kick"; data: { playerId: string } })
+  | (Envelope & { type: "room.hostplays"; data: { enabled: boolean } })
   | (Envelope & { type: "chat.send"; data: { text: string } })
   | (Envelope & { type: "game.select"; data: { gameId: string } })
   | (Envelope & {

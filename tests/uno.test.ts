@@ -30,6 +30,13 @@ describe("一起 UNO", () => {
     expect(view.turnPlayerId.length).toBeGreaterThan(0);
   });
 
+  it("房主参赛时也能拿到手牌", () => {
+    const all = makePlayers(3);
+    all[0]!.role = "player";
+    const game = new UnoGame(all, 0);
+    expect(game.viewFor(HOST_ID).hand).toHaveLength(7);
+  });
+
   it("非当前玩家不能行动", () => {
     const game = new UnoGame(participants, 0);
     const turnId = game.viewFor(participants[0]!.id).turnPlayerId;
