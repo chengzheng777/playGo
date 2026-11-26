@@ -4,6 +4,8 @@ import {
   DEFAULT_DRAW_SETTINGS,
   DEFAULT_SETTINGS,
   type DrawSettings,
+  MAX_DRAW_WORD_LEN,
+  MAX_DRAW_WORDS,
   MAX_PLAYERS,
   type Player,
   ROOM_CODE_ALPHABET,
@@ -48,6 +50,22 @@ function shortId(prefix: string): string {
 
 function newToken(): string {
   return randomBytes(16).toString("hex");
+}
+
+/** 自定义词去空白、去重、限长限量；忽略大小写 */
+export function sanitizeWords(words: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of words) {
+    const word = raw.trim().slice(0, MAX_DRAW_WORD_LEN);
+    if (!word) continue;
+    const key = word.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(word);
+    if (result.length >= MAX_DRAW_WORDS) break;
+  }
+  return result;
 }
 
 function firstFreeSeat(players: Player[]): number {
@@ -125,7 +143,7 @@ export class RoomManager {
       lastActiveAt: Date.now(),
       gameId,
       settings: { ...DEFAULT_SETTINGS },
-      drawSettings: { ...DEFAULT_DRAW_SETTINGS },
+      drawSettings: { ...DEFAULT_DRAW_SETTINGS, customWords: [] },
       game: null,
       uno: null,
       color: null,
@@ -238,6 +256,7 @@ export class RoomManager {
     record.drawSettings = {
       roundsPerPlayer: Math.min(3, Math.max(1, settings.roundsPerPlayer)),
       roundSeconds: Math.min(180, Math.max(30, settings.roundSeconds)),
+      customWords: sanitizeWords(settings.customWords),
     };
     record.version += 1;
     record.lastActiveAt = Date.now();

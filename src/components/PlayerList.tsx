@@ -5,10 +5,14 @@ export function PlayerList({
   players,
   youId,
   hostId,
+  canKick = false,
+  onKick,
 }: {
   players: Player[];
   youId: string;
   hostId: string;
+  canKick?: boolean;
+  onKick?: (playerId: string) => void;
 }) {
   return (
     <section className="panel players-panel">
@@ -31,6 +35,18 @@ export function PlayerList({
                 <span className="tag tag-ready">已加入</span>
               )}
               {!player.connected && <span className="tag tag-off">掉线</span>}
+              {canKick && player.id !== hostId && onKick && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-mini kick-btn"
+                  onClick={() => {
+                    if (!window.confirm(`把「${player.name}」移出房间？`)) return;
+                    onKick(player.id);
+                  }}
+                >
+                  移出
+                </button>
+              )}
             </span>
           </li>
         ))}

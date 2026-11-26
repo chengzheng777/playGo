@@ -541,6 +541,19 @@ select {
   color: var(--danger);
 }
 
+.kick-btn {
+  height: 28px;
+  padding: 0 9px;
+  font-size: 12px;
+  color: var(--danger);
+  border-color: rgba(255, 112, 112, 0.3);
+}
+
+.kick-unready-btn {
+  color: var(--danger);
+  border-color: rgba(255, 112, 112, 0.3);
+}
+
 .empty-hint {
   padding-top: 4px;
   font-size: 13px;
@@ -622,6 +635,164 @@ select {
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* ---------- 对局悬浮聊天 ---------- */
+
+.game-chat-toggle {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 8px;
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-radius: 14px 0 0 14px;
+  background: rgba(13, 20, 29, 0.72);
+  color: var(--text);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  box-shadow: -6px 0 24px rgba(0, 0, 0, 0.3);
+  transition:
+    right 0.22s ease,
+    background 0.16s ease;
+}
+
+.game-chat-toggle:hover {
+  background: rgba(30, 41, 59, 0.86);
+}
+
+.game-chat-toggle.open {
+  right: min(340px, 86vw);
+}
+
+.game-chat-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.game-chat-label {
+  font-size: 11px;
+  color: var(--muted);
+  writing-mode: vertical-rl;
+  letter-spacing: 0.16em;
+}
+
+.game-chat-badge {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #2b0505;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+}
+
+.game-chat {
+  position: fixed;
+  top: 64px;
+  right: 0;
+  bottom: 84px;
+  z-index: 44;
+  width: min(340px, 86vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 12px calc(12px + env(safe-area-inset-bottom));
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-radius: 16px 0 0 16px;
+  background: rgba(8, 13, 20, 0.74);
+  backdrop-filter: blur(16px) saturate(1.15);
+  box-shadow: -20px 0 50px rgba(0, 0, 0, 0.45);
+  transform: translateX(105%);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    transform 0.22s ease,
+    opacity 0.22s ease,
+    visibility 0.22s;
+}
+
+.game-chat.open {
+  transform: none;
+  opacity: 1;
+  visibility: visible;
+}
+
+.game-chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.game-chat-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.game-chat-close {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.game-chat-close:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.game-chat-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+
+.game-chat-form {
+  flex: none;
+}
+
+.game-chat-form .input,
+.game-chat-form .btn {
+  height: 40px;
+}
+
+@media (max-width: 520px) {
+  .game-chat {
+    top: 56px;
+    bottom: 72px;
+    width: min(320px, 88vw);
+  }
+
+  .game-chat-toggle.open {
+    right: min(320px, 88vw);
   }
 }
 
@@ -1846,6 +2017,84 @@ select {
   color: var(--muted);
 }
 
+.setting-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.setting-hint {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.word-batch {
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+}
+
+.word-batch:focus {
+  border-color: rgba(62, 224, 143, 0.65);
+  box-shadow: 0 0 0 3px rgba(62, 224, 143, 0.14);
+}
+
+.word-add-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.word-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.word-chips.read-only {
+  padding-top: 2px;
+}
+
+.word-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.word-chip button {
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.word-chip button:hover {
+  color: var(--danger);
+}
+
 /* 房间内只做游戏切换，不放大厅目录 */
 .game-pills {
   display: flex;
@@ -2844,6 +3093,31 @@ select {
   font-size: 18px;
 }
 
+@media (max-width: 420px) {
+  .draw-head {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .draw-label,
+  .draw-who b {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .draw-answer {
+    width: 100%;
+    margin-left: 0;
+    font-size: 13px;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .draw-answer b {
+    font-size: 16px;
+  }
+}
+
 .draw-stage {
   position: relative;
   width: 100%;
@@ -3108,6 +3382,60 @@ select {
   font-size: 12px;
   color: var(--muted);
   font-weight: 400;
+}
+
+.draw-progress {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 620px) {
+  .draw-progress {
+    display: none;
+  }
+}
+
+.draw-answer-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.draw-guessed {
+  position: relative;
+  z-index: 5;
+  padding: 10px 12px;
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  border-radius: 12px;
+  background: rgba(74, 222, 128, 0.08);
+  color: #4ade80;
+  font-size: 14px;
+  text-align: center;
+}
+
+.draw-correct {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.draw-correct-item {
+  padding: 4px 10px;
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  border-radius: 999px;
+  background: rgba(74, 222, 128, 0.1);
+  color: #4ade80;
+  font-size: 12px;
+}
+
+.draw-correct-item b {
+  font-weight: 600;
+}
+
+.draw-correct-item.drawer {
+  border-color: rgba(125, 211, 252, 0.4);
+  background: rgba(125, 211, 252, 0.1);
+  color: #7dd3fc;
 }
 
 @media (max-height: 620px) {

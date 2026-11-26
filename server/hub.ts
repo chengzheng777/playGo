@@ -7,11 +7,13 @@ import {
   type ChatMessage,
   type ClientMessage,
   type ColorAction,
-  type DrawSettings,
+  type DrawSettingsPatch,
   type ErrorCode,
   type GameAction,
   isRoomCode,
   MAX_CHAT_LEN,
+  MAX_DRAW_WORD_LEN,
+  MAX_DRAW_WORDS,
   MAX_NAME_LEN,
   type Player,
   PROTOCOL_VERSION,
@@ -74,6 +76,7 @@ const profileSchema = z.object({
   avatar: avatarShape.optional(),
 });
 const chatSchema = z.object({ text: z.string().trim().min(1).max(MAX_CHAT_LEN) });
+const kickSchema = z.object({ playerId: z.string().trim().min(1).max(64) });
 const pingSchema = z.object({ t: z.number() });
 const selectGameSchema = z.object({ gameId: z.string().trim().min(1).max(32) });
 const settingsSchema = z.object({
@@ -87,6 +90,10 @@ const settingsSchema = z.object({
     .object({
       roundsPerPlayer: z.number().int().min(1).max(3),
       roundSeconds: z.number().int().min(30).max(180),
+      customWords: z
+        .array(z.string().trim().min(1).max(MAX_DRAW_WORD_LEN))
+        .max(MAX_DRAW_WORDS)
+        .optional(),
     })
     .optional(),
 });
@@ -163,6 +170,11 @@ function parseClientMessage(raw: string): Parsed {
       const parsed = profileSchema.safeParse(msg.data);
       if (!parsed.success) return { kind: "invalid" };
       return { kind: "ok", msg: { ...base, type: "player.update", data: parsed.data } };
+    }
+    case "player.kick": {
+      const parsed = kickSchema.safeParse(msg.data);
+      if (!parsed.success) return { kind: "invalid" };
+      return { kind: "ok", msg: { ...base, type: "player.kick", data: parsed.data } };
     }
     case "chat.send": {
       const parsed = chatSchema.safeParse(msg.data);
@@ -324,6 +336,8 @@ export class Hub {
         return void this.setReady(conn, parsed.msg.data.ready);
       case "player.update":
         return void this.setProfile(conn, parsed.msg.data);
+      case "player.kick":
+        return void this.kickPlayer(conn, parsed.msg.data.playerId);
       case "chat.send":
         return void this.chat(conn, parsed.msg.data.text);
       case "game.select":
@@ -463,6 +477,41 @@ export class Hub {
     this.broadcast(roomCode);
   }
 
+  /** 房主移出玩家：仅大厅，token 立即失效，被移出者的连接收到 KICKED 后关闭 */
+  private kickPlayer(conn: Conn, playerId: string): void {
+    const record = this.roomOf(conn);
+    if (!record) {
+      this.replyError(conn, "ROOM_NOT_FOUND", "房间已失效，请重新创建");
+      return;
+    }
+    if (!this.isHost(conn, record)) return;
+    if (record.room.phase !== "lobby") {
+      this.replyError(conn, "BAD_PHASE", "游戏进行中不能移出玩家，先结束本局");
+      return;
+    }
+    if (playerId === record.room.hostId || playerId === conn.playerId) {
+      this.replyError(conn, "BAD_PHASE", "不能移出房主");
+      return;
+    }
+    const player = record.room.players.find((item) => item.id === playerId);
+    if (!player) {
+      this.replyError(conn, "BAD_PHASE", "玩家不在房间里");
+      return;
+    }
+
+    this.clearRemovalTimer(record.room.code, playerId);
+    for (const target of this.conns.values()) {
+      if (target.roomCode !== record.room.code || target.playerId !== playerId) continue;
+      // 先解绑，避免关闭连接时又把这个玩家标记成掉线/安排清理
+      target.roomCode = undefined;
+      target.playerId = undefined;
+      this.fail(target, "KICKED", "你被房主移出房间");
+    }
+
+    this.rooms.removePlayer(record.room.code, playerId);
+    this.broadcast(record.room.code);
+  }
+
   private chat(conn: Conn, text: string): void {
     const { roomCode, playerId } = conn;
     if (!roomCode || !playerId) return;
@@ -509,7 +558,10 @@ export class Hub {
     this.broadcast(record.room.code);
   }
 
-  private setSettings(conn: Conn, data: { settings?: YiyuSettings; draw?: DrawSettings }): void {
+  private setSettings(
+    conn: Conn,
+    data: { settings?: YiyuSettings; draw?: DrawSettingsPatch },
+  ): void {
     const record = this.roomOf(conn);
     if (!record) {
       this.replyError(conn, "ROOM_NOT_FOUND", "房间已失效，请重新创建");
@@ -521,7 +573,14 @@ export class Hub {
       return;
     }
     if (data.settings) this.rooms.setSettings(record.room.code, data.settings);
-    if (data.draw) this.rooms.setDrawSettings(record.room.code, data.draw);
+    if (data.draw) {
+      this.rooms.setDrawSettings(record.room.code, {
+        ...record.drawSettings,
+        roundsPerPlayer: data.draw.roundsPerPlayer,
+        roundSeconds: data.draw.roundSeconds,
+        customWords: data.draw.customWords ?? record.drawSettings.customWords,
+      });
+    }
     this.broadcast(record.room.code);
   }
 
@@ -556,7 +615,11 @@ export class Hub {
     }
     const notReady = connected.filter((player) => !player.ready);
     if (!ended && notReady.length > 0) {
-      this.replyError(conn, "BAD_PHASE", `还有 ${notReady.length} 人没准备`);
+      this.replyError(
+        conn,
+        "BAD_PHASE",
+        `还有 ${notReady.length} 人没准备，房主可以先移出未准备的玩家`,
+      );
       return;
     }
 
@@ -579,8 +642,9 @@ export class Hub {
       record.uno = null;
       record.draw = null;
     } else if (record.gameId === "draw") {
+      // 离线玩家不进入本局，也不占画手轮次
       record.draw = new DrawGame(
-        record.room.players,
+        connected,
         { hostId: record.room.hostId, ...record.drawSettings },
         Date.now(),
       );
@@ -731,7 +795,10 @@ export class Hub {
         serverTime: Date.now(),
         gameId: record.gameId,
         settings: { ...record.settings },
-        drawSettings: { ...record.drawSettings },
+        drawSettings: {
+          ...record.drawSettings,
+          customWords: [...record.drawSettings.customWords],
+        },
         game: record.game?.viewFor(player.id) ?? null,
         uno: record.uno?.viewFor(player.id) ?? null,
         color: record.color?.viewFor(player.id) ?? null,

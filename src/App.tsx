@@ -1,3 +1,4 @@
+import { GameChat } from "./components/GameChat";
 import { Toast } from "./components/Toast";
 import { store, useAppState } from "./store";
 import { ColorGameView } from "./views/ColorView";
@@ -11,6 +12,7 @@ import { UnoGameView } from "./views/UnoView";
 
 export function App() {
   const state = useAppState();
+  const inGame = Boolean(state.game || state.uno || state.color || state.draw);
 
   return (
     <div className="app">
@@ -32,6 +34,7 @@ export function App() {
             ) : (
               <LobbyView />
             ))}
+          {state.view === "lobby" && inGame && <GameChat />}
         </>
       )}
       {state.error && <Toast key={state.error} text={state.error} onDone={store.clearError} />}

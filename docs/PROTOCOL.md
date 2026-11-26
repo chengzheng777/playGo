@@ -40,7 +40,8 @@
 | `room.left`     | S→C       | `{playerId, reason}`                                                          | 玩家离开                                    |
 | `player.ready`  | C→S       | `{ready}`                                                                     | 准备/取消                                   |
 | `player.update` | C→S       | `{name?, avatar?}`                                                            | 修改用户资料，随后广播                      |
-| `chat.send`     | C→S       | `{text}`                                                                      | 文本 ≤ 200 字                               |
+| `player.kick`   | C→S       | `{playerId}`                                                                  | 仅房主、仅大厅；移出玩家并使其 token 失效   |
+| `chat.send`     | C→S       | `{text}`                                                                      | 文本 ≤ 200 字；大厅与对局中都可发           |
 | `chat.message`  | S→C       | `{from, name, text, ts}`                                                      |                                             |
 | `game.select`   | C→S       | `{gameId}`                                                                    | 仅房主，仅大厅阶段                          |
 | `game.settings` | C→S       | `{settings}`                                                                  | 仅房主、仅大厅；目标分 3–20，回合 15–180 秒 |
@@ -126,17 +127,18 @@ interface YiyuSettings {
 
 ## 5. 错误码
 
-| code             | 含义                 | fatal |
-| ---------------- | -------------------- | ----- |
-| `PROTOCOL_ERROR` | 帧格式错误 / 超长    | ✅    |
-| `ROOM_NOT_FOUND` | 房间码不存在或已结束 | ❌    |
-| `ROOM_FULL`      | 人数已达上限         | ❌    |
-| `NAME_TAKEN`     | 昵称重复             | ❌    |
-| `BAD_TOKEN`      | 重连 token 无效      | ❌    |
-| `NOT_HOST`       | 非房主执行房主操作   | ❌    |
-| `BAD_PHASE`      | 当前阶段不允许该操作 | ❌    |
-| `RATE_LIMITED`   | 频率超限             | ❌    |
-| `INTERNAL`       | 服务端异常           | ✅    |
+| code             | 含义                 | fatal    |
+| ---------------- | -------------------- | -------- |
+| `PROTOCOL_ERROR` | 帧格式错误 / 超长    | ✅       |
+| `ROOM_NOT_FOUND` | 房间码不存在或已结束 | ❌       |
+| `ROOM_FULL`      | 人数已达上限         | ❌       |
+| `NAME_TAKEN`     | 昵称重复             | ❌       |
+| `BAD_TOKEN`      | 重连 token 无效      | ❌       |
+| `NOT_HOST`       | 非房主执行房主操作   | ❌       |
+| `BAD_PHASE`      | 当前阶段不允许该操作 | ❌       |
+| `RATE_LIMITED`   | 频率超限             | ❌       |
+| `KICKED`         | 被房主移出房间       | 随后断开 |
+| `INTERNAL`       | 服务端异常           | ✅       |
 
 ---
 
@@ -370,15 +372,22 @@ interface DrawView {
   gameId: "draw";
   phase: "draw" | "reveal" | "ended";
   round: number;
-  totalRounds: number; // = 参赛人数 × 每人轮数
+  totalRounds: number; // = 在线参赛人数 × 每人轮数
   drawerId: string;
   drawerName: string;
   deadline: number;
   word?: string; // 作画时只给画手；揭晓后所有人可见
   scores: { id; name; avatar; score; timeMs; connected; isDrawer }[];
   strokes: DrawStroke[]; // 发给所有人，用于首次进入 / 重连重绘
-  guesses: { name; text; ok }[]; // 最近 8 条猜词，所有人可见
-  result?: { word; guesserName?; points? };
+  guesses: { name; text; ok; points? }[]; // 最近 8 条猜词，答对带本轮得分
+  guesserCount: number; // 本轮需要猜对的总人数（画手以外）
+  correctGuessers: { playerId; name; points }[]; // 本轮已猜对，按顺序
+  result?: {
+    word: string;
+    guessers: { playerId; name; points }[];
+    allCorrect: boolean;
+    drawerPoints: number;
+  };
   lastEvent: { id; text } | null;
 }
 
@@ -403,13 +412,24 @@ interface DrawStroke {
 - 服务端把笔迹以 `draw.delta` / `draw.clear` 广播给房间内所有人，大屏和猜词手机都能实时看到。
 - 首次进入或重连时通过 `room.state.draw.strokes` 全量重绘。
 - 每次 `guess`（对错都算）都会广播新的 `room.state`，`draw.guesses` 里能看到所有人的猜测。
-- 猜对：猜的人得 `10 + 剩余秒数/10`（最多 +8）、画手 +5，立即进入揭晓；大屏在作画阶段拿不到 `word`。
-- 同分时按 `scores[].timeMs` 从小到大排名；房主可在结束后直接发 `game.start` 重开，无需重新准备。
+- 同一轮允许多人猜对，首个猜对不会结束本轮。按猜对顺序得分：第 1 位 5 分、第 2 位 3 分、第 3 位及以后 1 分；同一玩家重复猜对不重复得分。
+- 本轮在所有猜词者都猜对或倒计时结束时进入揭晓（4.5 秒）。
+- 画手本轮每有 1 名猜词者猜对 +1；如果所有猜词者都猜对，画手本轮 0 分。
+- 猜对者累计用时记「本轮开始到答对」，未猜对者与画手记整轮时长；同分时按 `scores[].timeMs` 从小到大排名。
+- 开局时只把在线玩家纳入本局，离线玩家不占轮次；房主可在结束后直接发 `game.start` 重开，无需重新准备。
+- 大屏在作画阶段拿不到 `word`。
 
 规则设置（`game.settings`，仅大厅阶段、仅房主）：
 
 ```jsonc
-{ "draw": { "roundsPerPlayer": 2, "roundSeconds": 80 } }
+{
+  "draw": {
+    "roundsPerPlayer": 2,
+    "roundSeconds": 80,
+    "customWords": ["打工人", "早八", "摸鱼"]
+  }
+}
 ```
 
-`room.state.drawSettings` 会同步给所有人。
+- `customWords` 追加到内置词库，不替换；单个词 1–20 字，最多 200 个，服务端会去重。
+- `room.state.drawSettings` 会同步给所有人，下一局生效。

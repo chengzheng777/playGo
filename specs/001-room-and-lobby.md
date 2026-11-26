@@ -27,6 +27,8 @@ PC 起本地服务，手机扫码或从列表进房。用户不需要账号，�
 - 房主是大屏/主持人，**不参赛**。
 - 至少 2 名已连接的手机玩家，且都已点「加入游戏」（ready）。
 - 房主可以改游戏、改规则（仅 `lobby` 阶段）。
+- 房主可以在 `lobby` 阶段移出玩家，或一键移出未准备玩家；详见 `006-room-admin-and-chat.md`。
+- 开局时只把在线玩家纳入本局，离线玩家不占轮次。
 
 ### 生命周期
 
@@ -36,7 +38,8 @@ PC 起本地服务，手机扫码或从列表进房。用户不需要账号，�
 
 ## 接口
 
-`GET /api/rooms` 返回公开摘要；`room.create / join / leave`、`player.ready / update` 见协议文档。
+`GET /api/rooms` 返回公开摘要；`room.create / join / leave`、`player.ready / update`、`player.kick` 见协议文档。
+对局内公屏聊天见 `006-room-admin-and-chat.md`。
 
 ## 验收标准
 

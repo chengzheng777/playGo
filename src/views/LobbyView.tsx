@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { useState } from "react";
 import { GAME_CATALOG, getGameMeta } from "../../shared/games";
+import { MAX_DRAW_WORD_LEN, MAX_DRAW_WORDS } from "../../shared/protocol";
 import { AvatarBadge } from "../components/Avatar";
 import { ChatPanel } from "../components/ChatPanel";
 import { PlayerList } from "../components/PlayerList";
@@ -19,10 +20,20 @@ const CONN_LABEL: Record<string, string> = {
 const SCORE_OPTIONS = [5, 8, 10, 12];
 const TIME_OPTIONS = [30, 45, 60, 90];
 
+/** 支持中英文逗号、顿号、分号、换行混排 */
+function parseWordInput(text: string): string[] {
+  return text
+    .split(/[,，、;；\n\r]+/)
+    .map((word) => word.trim())
+    .filter(Boolean);
+}
+
 export function LobbyView() {
   const state = useAppState();
   const { room, you, settings, drawSettings } = state;
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [wordInput, setWordInput] = useState("");
+  const [wordHint, setWordHint] = useState("");
 
   if (!room || !you) {
     return (
@@ -39,16 +50,63 @@ export function LobbyView() {
   const onlineParticipants = participants.filter((player) => player.connected);
   const readyCount = onlineParticipants.filter((player) => player.ready).length;
   const needReady = onlineParticipants.length - readyCount;
+  const unreadyPlayers = participants.filter((player) => !player.ready);
   const selected = state.gameId;
   const canStart = Boolean(selected) && onlineParticipants.length >= 2 && needReady === 0;
+  const customWords = drawSettings.customWords ?? [];
 
   const startLabel = !selected
     ? "先选一个游戏"
     : onlineParticipants.length < 2
       ? "至少需要 2 名玩家"
       : needReady > 0
-        ? `还差 ${needReady} 人加入`
+        ? `还有 ${needReady} 人未加入`
         : "开始游戏";
+
+  function addWords() {
+    const incoming = parseWordInput(wordInput);
+    if (incoming.length === 0) return;
+
+    const seen = new Set(customWords.map((word) => word.toLowerCase()));
+    const next = [...customWords];
+    let skipped = 0;
+    for (const raw of incoming) {
+      const word = raw.slice(0, MAX_DRAW_WORD_LEN);
+      if (!word || seen.has(word.toLowerCase()) || next.length >= MAX_DRAW_WORDS) {
+        skipped += 1;
+        continue;
+      }
+      seen.add(word.toLowerCase());
+      next.push(word);
+    }
+
+    if (next.length === customWords.length) {
+      setWordHint("没有可添加的新词（重复或已达到上限）");
+      return;
+    }
+
+    store.updateDrawSettings({ ...drawSettings, customWords: next });
+    setWordInput("");
+    setWordHint(
+      skipped > 0
+        ? `已加入 ${next.length - customWords.length} 个，跳过 ${skipped} 个重复或超限的词`
+        : "",
+    );
+  }
+
+  function removeWord(word: string) {
+    store.updateDrawSettings({
+      ...drawSettings,
+      customWords: customWords.filter((item) => item !== word),
+    });
+    setWordHint("");
+  }
+
+  function clearWords() {
+    if (!window.confirm("清空所有自定义词？内置词库不受影响。")) return;
+    store.updateDrawSettings({ ...drawSettings, customWords: [] });
+    setWordHint("");
+  }
 
   return (
     <div className="lobby">
@@ -117,8 +175,8 @@ export function LobbyView() {
               )}
               {selected === "draw" && (
                 <p className="game-rule">
-                  轮流由一名玩家在手机上画，笔迹实时同步到大屏，其他人在手机上打字猜词。猜对的人
-                  +10，画的人 +5。
+                  轮流由一名玩家在手机上画，笔迹实时同步到大屏，其他人在手机上打字猜词。
+                  按猜对顺序得 5 / 3 / 1 分，所有人猜对或时间到进入揭晓。
                 </p>
               )}
             </section>
@@ -145,7 +203,7 @@ export function LobbyView() {
                       : selected === "color"
                         ? "每轮随机一个颜色，拍一张照片，画面中心越接近目标色得分越高。"
                         : selected === "draw"
-                          ? "轮流画图，笔迹会同步到大屏，其他人打字猜。"
+                          ? "轮流画图，笔迹会同步到大屏，其他人打字猜。按猜对顺序得 5 / 3 / 1 分。"
                           : "房主电脑会播放词语，你和其他手机玩家分队猜词，记得背对屏幕。"}
                   </p>
 
@@ -156,8 +214,27 @@ export function LobbyView() {
                         <span className="chip">每回合 {settings.roundSeconds} 秒</span>
                       </>
                     )}
+                    {selected === "draw" && (
+                      <>
+                        <span className="chip">每人 {drawSettings.roundsPerPlayer} 轮</span>
+                        <span className="chip">每轮 {drawSettings.roundSeconds} 秒</span>
+                        {customWords.length > 0 && (
+                          <span className="chip">自定义词 {customWords.length}</span>
+                        )}
+                      </>
+                    )}
                     <span className="chip">已加入 {readyCount} 人</span>
                   </div>
+
+                  {selected === "draw" && customWords.length > 0 && (
+                    <div className="word-chips read-only">
+                      {customWords.map((word) => (
+                        <span key={word} className="word-chip">
+                          {word}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   <button
                     className={`btn ${you.ready ? "btn-muted" : "btn-primary"} btn-block`}
@@ -255,10 +332,67 @@ export function LobbyView() {
                   ))}
                 </div>
               </div>
+
+              <div className="setting-block">
+                <span className="label">自定义词库</span>
+                <p className="setting-hint">
+                  会和内置词库一起抽。可一次粘贴多个，用逗号、顿号或换行分隔；单个词最多{" "}
+                  {MAX_DRAW_WORD_LEN} 字。
+                </p>
+                <textarea
+                  className="word-batch"
+                  rows={2}
+                  value={wordInput}
+                  placeholder="例如：打工人，早八，摸鱼"
+                  onChange={(event) => {
+                    setWordInput(event.target.value);
+                    setWordHint("");
+                  }}
+                />
+                <div className="word-add-row">
+                  <span className="count">
+                    已添加 {customWords.length}/{MAX_DRAW_WORDS}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-mini"
+                    disabled={parseWordInput(wordInput).length === 0}
+                    onClick={addWords}
+                  >
+                    加入词库
+                  </button>
+                </div>
+                {wordHint && <p className="setting-hint">{wordHint}</p>}
+                {customWords.length > 0 && (
+                  <div className="word-chips">
+                    {customWords.map((word) => (
+                      <span key={word} className="word-chip">
+                        {word}
+                        <button
+                          type="button"
+                          aria-label={`删除 ${word}`}
+                          onClick={() => removeWord(word)}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                    <button type="button" className="btn btn-ghost btn-mini" onClick={clearWords}>
+                      清空
+                    </button>
+                  </div>
+                )}
+              </div>
             </section>
           )}
 
-          <PlayerList players={players} youId={you.id} hostId={room.hostId} />
+          <PlayerList
+            players={players}
+            youId={you.id}
+            hostId={room.hostId}
+            canKick={isHost}
+            onKick={(playerId) => store.kickPlayer(playerId)}
+          />
         </div>
 
         <div className="col">
@@ -276,10 +410,29 @@ export function LobbyView() {
             >
               {startLabel}
             </button>
+            {unreadyPlayers.length > 0 && (
+              <button
+                className="btn btn-ghost btn-block kick-unready-btn"
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      `移出 ${unreadyPlayers.length} 名未准备的玩家？被移出的人需要重新扫码加入。`,
+                    )
+                  ) {
+                    return;
+                  }
+                  store.kickUnready();
+                }}
+              >
+                移出未准备玩家（{unreadyPlayers.length}）
+              </button>
+            )}
             <span className="ready-summary">
               {onlineParticipants.length < 2
                 ? "房主不参赛，至少 2 名手机玩家才能开始"
-                : `已加入 ${readyCount}/${onlineParticipants.length} · 目标 ${settings.targetScore} 分`}
+                : selected === "draw"
+                  ? `已加入 ${readyCount}/${onlineParticipants.length} · 每人 ${drawSettings.roundsPerPlayer} 轮`
+                  : `已加入 ${readyCount}/${onlineParticipants.length} · 目标 ${settings.targetScore} 分`}
             </span>
           </div>
         ) : null}
